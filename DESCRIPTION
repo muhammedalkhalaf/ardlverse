@@ -4,8 +4,8 @@ Title: Comprehensive ARDL Modeling Framework: Panel, Bootstrap, Quantile-Nonline
 Version: 1.0.0
 Date: 2026-02-26
 Authors@R: c(
-    person("Muhammad", "Alkhalaf", 
-           email = "contact@rufyqelngeh.com", 
+    person("Muhammad Abdullah", "Alkhalaf", 
+           email = "muhammedalkhalaf@gmail.com", 
            role = c("aut", "cre"),
            comment = c(ORCID = "0009-0002-2677-9246")),
     person("Merwan", "Roudane", 

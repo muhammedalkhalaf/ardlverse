@@ -39,9 +39,9 @@ Data generation for examples:
 }
 }
 \author{
-Muhammad Alkhalaf <contact@rufyqelngeh.com>
+Muhammad Abdullah Alkhalaf <muhammedalkhalaf@gmail.com>
 
-Maintainer: Muhammad Alkhalaf <contact@rufyqelngeh.com>
+Maintainer: Muhammad Abdullah Alkhalaf <muhammedalkhalaf@gmail.com>
 }
 \references{
 Pesaran, M. H., Shin, Y., & Smith, R. P. (1999). Pooled mean group estimation

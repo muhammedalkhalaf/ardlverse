@@ -1,0 +1,15 @@
+# R package build artifacts
+*.tar.gz
+*.Rcheck/
+*.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# IDE
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

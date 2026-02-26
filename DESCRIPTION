@@ -1,0 +1,52 @@
+Package: ardlverse
+Type: Package
+Title: Comprehensive ARDL Modeling Framework: Panel, Bootstrap, Quantile-Nonlinear, and Fourier Extensions
+Version: 1.0.0
+Date: 2026-02-26
+Authors@R: c(
+    person("Muhammad", "Alkhalaf", 
+           email = "contact@rufyqelngeh.com", 
+           role = c("aut", "cre"),
+           comment = c(ORCID = "0009-0002-2677-9246")),
+    person("Merwan", "Roudane", 
+           role = "ctb",
+           comment = "Original Stata implementations"))
+Description: A unified framework for Autoregressive Distributed Lag (ARDL) modeling 
+    and cointegration analysis. Implements Panel ARDL with Pooled Mean Group (PMG), 
+    Mean Group (MG), and Dynamic Fixed Effects (DFE) estimators following 
+    Pesaran, Shin & Smith (1999). Provides bootstrap-based bounds testing for 
+    small samples, Quantile Nonlinear ARDL (QNARDL) combining distributional and 
+    asymmetric effects, and Fourier ARDL for modeling smooth structural breaks. 
+    All methods include comprehensive diagnostics, publication-ready outputs, 
+    and visualization tools.
+License: GPL-3 + file LICENSE
+URL: https://github.com/muhammedalkhalaf/ardlverse
+BugReports: https://github.com/muhammedalkhalaf/ardlverse/issues
+Encoding: UTF-8
+LazyData: true
+Depends: R (>= 4.0.0)
+Imports:
+    stats,
+    MASS,
+    Matrix,
+    nlme,
+    plm,
+    quantreg,
+    sandwich,
+    lmtest,
+    car,
+    ggplot2,
+    dplyr,
+    tidyr,
+    purrr,
+    tibble,
+    gridExtra,
+    scales
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown,
+    covr
+RoxygenNote: 7.3.0
+Config/testthat/edition: 3
+NeedsCompilation: no

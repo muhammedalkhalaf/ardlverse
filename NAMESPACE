@@ -7,6 +7,12 @@ export(qnardl)
 export(fourier_ardl)
 export(ardl_diagnostics)
 
+# Exports - New ARDL Extensions
+export(aardl)
+export(mtnardl)
+export(rardl)
+export(pnardl)
+
 # Exports - Supporting Functions
 export(hausman_test)
 export(asymmetry_test)
@@ -22,6 +28,24 @@ export(generate_oil_data)
 # S3 Methods - panel_ardl
 S3method(summary, panel_ardl)
 S3method(print, panel_ardl)
+
+# S3 Methods - aardl
+S3method(summary, aardl)
+S3method(print, aardl)
+
+# S3 Methods - mtnardl
+S3method(summary, mtnardl)
+S3method(print, mtnardl)
+S3method(plot, mtnardl)
+
+# S3 Methods - rardl
+S3method(summary, rardl)
+S3method(print, rardl)
+S3method(plot, rardl)
+
+# S3 Methods - pnardl
+S3method(summary, pnardl)
+S3method(print, pnardl)
 
 # S3 Methods - boot_ardl
 S3method(summary, boot_ardl)

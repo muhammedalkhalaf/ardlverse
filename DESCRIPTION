@@ -1,7 +1,7 @@
 Package: ardlverse
 Type: Package
 Title: Comprehensive ARDL Modeling Framework: Panel, Bootstrap, Quantile-Nonlinear, and Fourier Extensions
-Version: 1.0.0
+Version: 1.1.0
 Date: 2026-02-26
 Authors@R: c(
     person("Muhammad Abdullah", "Alkhalaf", 
@@ -16,9 +16,11 @@ Description: A unified framework for Autoregressive Distributed Lag (ARDL) model
     Mean Group (MG), and Dynamic Fixed Effects (DFE) estimators following 
     Pesaran, Shin & Smith (1999). Provides bootstrap-based bounds testing for 
     small samples, Quantile Nonlinear ARDL (QNARDL) combining distributional and 
-    asymmetric effects, and Fourier ARDL for modeling smooth structural breaks. 
-    All methods include comprehensive diagnostics, publication-ready outputs, 
-    and visualization tools.
+    asymmetric effects, and Fourier ARDL for modeling smooth structural breaks.
+    New in v1.1: Augmented ARDL (AARDL) with deferred t and F tests, Multiple-Threshold
+    NARDL for complex asymmetries, Rolling/Recursive ARDL for time-varying relationships,
+    and Panel NARDL for nonlinear panel cointegration. All methods include comprehensive 
+    diagnostics, publication-ready outputs, and visualization tools.
 License: GPL-3 + file LICENSE
 URL: https://github.com/muhammedalkhalaf/ardlverse
 BugReports: https://github.com/muhammedalkhalaf/ardlverse/issues

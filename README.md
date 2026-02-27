@@ -121,7 +121,64 @@ summary(diag)
 plot(diag)
 ```
 
+### Augmented ARDL (New in v1.1.0)
+
+```r
+# Augmented ARDL with deferred tests
+aardl_model <- aardl(
+  gdp ~ inflation + investment,
+  data = ts_data,
+  type = "linear",  # or "nardl", "fourier", "fbnardl"
+  p = 2, q = 2
+)
+summary(aardl_model)
+```
+
+### Multiple-Threshold NARDL (New in v1.1.0)
+
+```r
+# Decompose into 4 regimes: large/small positive/negative changes
+mt_model <- mtnardl(
+  consumption ~ oil_price,
+  data = oil,
+  thresholds = c(-0.05, 0, 0.05),
+  p = 2, q = 2
+)
+summary(mt_model)
+plot(mt_model, type = "multipliers")
+```
+
+### Rolling ARDL (New in v1.1.0)
+
+```r
+# Time-varying bounds test
+roll_model <- rardl(
+  gdp ~ investment + trade,
+  data = ts_data,
+  method = "rolling",
+  window = 60
+)
+summary(roll_model)
+plot(roll_model, type = "all")
+```
+
+### Panel NARDL (New in v1.1.0)
+
+```r
+# Panel data with asymmetric effects
+pnardl_model <- pnardl(
+  y ~ x1 + x2,
+  data = panel_data,
+  id = "country",
+  time = "year",
+  estimator = "pmg"
+)
+summary(pnardl_model)
+```
+
 ## Main Functions
+
+### Core ARDL Models
 
 | Function | Description |
 |----------|-------------|
@@ -129,6 +186,20 @@ plot(diag)
 | `boot_ardl()` | Bootstrap ARDL bounds test |
 | `qnardl()` | Quantile Nonlinear ARDL |
 | `fourier_ardl()` | Fourier ARDL for structural breaks |
+
+### New in v1.1.0: ARDL Extensions
+
+| Function | Description |
+|----------|-------------|
+| `aardl()` | Augmented ARDL with deferred t and F tests (8 sub-models) |
+| `mtnardl()` | Multiple-Threshold NARDL for complex asymmetries |
+| `rardl()` | Rolling & Recursive ARDL for time-varying relationships |
+| `pnardl()` | Panel Nonlinear ARDL (PMG/MG/DFE with asymmetry) |
+
+### Supporting Functions
+
+| Function | Description |
+|----------|-------------|
 | `ardl_diagnostics()` | Comprehensive model diagnostics |
 | `hausman_test()` | Hausman test for PMG vs MG |
 | `asymmetry_test()` | Test for long-run asymmetry |
@@ -168,6 +239,8 @@ $$f_t = \sum_{k=1}^{K} [a_k \sin(2\pi k t/T) + b_k \cos(2\pi k t/T)]$$
 - Banerjee, P., Arcabic, V., & Lee, H. (2017). Fourier ADL cointegration test to approximate smooth breaks with new evidence from crude oil market. *Economic Modelling*, 67, 114-124.
 
 - McNown, R., Sam, C. Y., & Goh, S. K. (2018). Bootstrapping the autoregressive distributed lag test for cointegration. *Applied Economics*, 50(13), 1509-1521.
+
+- Sam, C. Y., McNown, R., & Goh, S. K. (2019). An augmented autoregressive distributed lag bounds test for cointegration. *Economic Modelling*, 80, 130-141.
 
 ## Author
 

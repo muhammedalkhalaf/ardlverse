@@ -1,0 +1,256 @@
+---
+title: "ardlverse: An R Ecosystem for ARDL Modeling and Cointegration Analysis"
+abstract: >
+  We introduce the ardlverse, an ecosystem of R packages for Autoregressive
+  Distributed Lag (ARDL) modeling and bounds testing for cointegration. The
+  ecosystem includes packages for augmented ARDL (aardl), rolling and recursive
+  ARDL (rardl), Fourier bootstrap NARDL (fbnardl), multiple-threshold NARDL
+  (mtnardl), Fourier quantile ARDL (fqardl), quantile ARDL (qardlr), panel
+  NARDL (pnardl), panel quantile ARDL (xtpqardl), and cross-sectionally
+  augmented panel quantile ARDL (xtcspqardl). These packages substantially
+  extend the ARDL bounds testing framework of Pesaran, Shin, and Smith (2001)
+  in several directions: bootstrap inference, nonlinear decompositions, Fourier
+  approximations for smooth structural breaks, quantile regression extensions,
+  and panel data variants with cross-sectional dependence correction. Together,
+  they provide the most comprehensive ARDL toolkit available in any statistical
+  software environment. All packages are open-source under the GPL-3 license.
+author:
+  - name: Muhammad Abdullah Alkhalaf
+    affiliation: Rufyq Elngeh for Academic and Business Services
+    address: Riyadh, Saudi Arabia
+    orcid: 0009-0002-2677-9246
+    email: muhammedalkhalaf@gmail.com
+type: package
+output:
+  rjtools::rjournal_article:
+    self_contained: yes
+    toc: no
+bibliography: paper.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE, comment = "#>")
+```
+
+# Introduction
+
+The Autoregressive Distributed Lag (ARDL) bounds test of \citet{PSS2001} is among
+the most widely used cointegration frameworks in applied economics. It permits
+testing for long-run relationships regardless of whether regressors are I(0),
+I(1), or mutually cointegrated. The existing R implementation in the `ARDL`
+package \citep{Natsiopoulos2022} provides standard linear ARDL estimation and
+bounds testing but lacks bootstrap bounds testing, nonlinear decompositions,
+Fourier approximations, quantile extensions, and panel variants.
+
+The `ardlverse` ecosystem fills these gaps with nine packages spanning the full
+range of ARDL methodology. This article describes each package, demonstrates
+usage with simulated data, and compares with existing implementations.
+
+# The aardl package
+
+The `aardl` package implements the augmented ARDL of \citet{Sam2019}, which
+resolves degenerate cases in the PSS bounds test by adding F-overall, t-dependent,
+and F-independent test statistics. It supports linear, bootstrap \citep{McNown2018},
+Fourier, and NARDL variants.
+
+```{r aardl-example}
+library(ardlverse)
+
+# Simulate cointegrated time series
+set.seed(42)
+n <- 200
+x1 <- cumsum(rnorm(n))
+x2 <- cumsum(rnorm(n))
+e <- rnorm(n, 0, 0.5)
+y <- 0.5 + 0.8 * x1 - 0.3 * x2 + e
+
+ts_data <- data.frame(y = y, x1 = x1, x2 = x2)
+
+# Augmented ARDL with bootstrap bounds test
+result <- aardl(y ~ x1 + x2, data = ts_data, p = 4, q = 4,
+                case = 3, type = "bootstrap", nboot = 2000)
+summary(result)
+```
+
+# The rardl package
+
+The `rardl` package implements rolling-window and recursive ARDL bounds testing
+\citep{Shahbaz2023, Khan2023} for detecting structural instability in
+cointegrating relationships over time.
+
+```{r rardl-example}
+# Rolling-window ARDL
+result <- rardl(y ~ x1 + x2, data = ts_data,
+                method = "rolling", window = 60, case = 3)
+plot(result)
+```
+
+The `plot` method produces time-varying F-statistics with confidence bands,
+allowing visual identification of periods where the cointegrating relationship
+breaks down.
+
+# The fbnardl package
+
+The `fbnardl` package implements Fourier NARDL with \citet{Kripfganz2020}
+critical values and Fourier Bootstrap NARDL with bootstrap cointegration tests
+\citep{Bertelli2022}. Fourier terms capture smooth structural breaks without
+requiring break date specification.
+
+```{r fbnardl-example}
+library(fbnardl)
+
+set.seed(123)
+n <- 250
+x1 <- cumsum(rnorm(n))
+y <- 0.5 * pmax(diff(c(0, x1)), 0) - 0.2 * pmin(diff(c(0, x1)), 0) +
+     cumsum(rnorm(n, 0, 0.3))
+ts_data <- data.frame(y = y, x1 = x1)
+
+# Fourier Bootstrap NARDL
+result <- fbnardl(y ~ x1, data = ts_data, decompose = "x1",
+                  type = "fbnardl", maxlag = 4, maxk = 3, reps = 999)
+summary(result)
+```
+
+# The mtnardl package
+
+The `mtnardl` package implements the multiple-threshold NARDL of \citet{Pal2016},
+which decomposes regressors into regime-specific partial sums based on multiple
+thresholds rather than just the zero threshold of standard NARDL.
+
+```{r mtnardl-example}
+# Multiple-threshold NARDL
+result <- mtnardl(y ~ x1, data = ts_data,
+                  thresholds = c(-0.5, 0, 0.5), case = 3)
+summary(result)
+```
+
+# The fqardl package
+
+The `fqardl` package combines Fourier terms with quantile regression in the ARDL
+framework, allowing both smooth structural change and distributional heterogeneity.
+
+```{r fqardl-example}
+library(fqardl)
+
+set.seed(456)
+n <- 200
+x1 <- cumsum(rnorm(n))
+y <- 0.3 * x1 + rnorm(n)
+ts_data <- data.frame(y = y, x1 = x1)
+
+result <- fqardl(y = ts_data$y, x = ts_data$x1,
+                 tau = c(0.25, 0.5, 0.75), type = "fqardl")
+summary(result)
+```
+
+# The qardlr package
+
+The `qardlr` package implements the quantile ARDL of \citet{Cho2015} with
+quantile-specific long-run, short-run, and impact parameters, BIC-based lag
+selection, and Wald tests for parameter constancy across quantiles.
+
+```{r qardlr-example}
+library(qardlr)
+
+set.seed(789)
+n <- 200
+x1 <- cumsum(rnorm(n))
+x2 <- cumsum(rnorm(n))
+y <- 0.5 * x1 - 0.3 * x2 + rnorm(n)
+ts_data <- data.frame(y = y, x1 = x1, x2 = x2)
+
+result <- qardl(y ~ x1 + x2, data = ts_data,
+                tau = seq(0.1, 0.9, 0.1), p = 2, q = 2)
+summary(result)
+```
+
+# The pnardl package
+
+The `pnardl` package extends NARDL \citep{Shin2014} to panel data with Pooled
+Mean Group (PMG), Mean Group (MG), and Dynamic Fixed Effects (DFE) estimators.
+
+```{r pnardl-example}
+# Simulate panel data
+set.seed(101)
+N <- 10; T_obs <- 50
+panel_data <- data.frame(
+  country = rep(paste0("C", 1:N), each = T_obs),
+  year = rep(2001:(2000 + T_obs), N),
+  y = unlist(lapply(1:N, function(i) {
+    x <- cumsum(rnorm(T_obs))
+    0.5 * pmax(diff(c(0, x)), 0) - 0.2 * pmin(diff(c(0, x)), 0) +
+      rnorm(T_obs, 0, 0.5)
+  })),
+  x1 = unlist(lapply(1:N, function(i) cumsum(rnorm(T_obs))))
+)
+
+# Panel NARDL with PMG estimator
+result <- pnardl(y ~ x1, data = panel_data,
+                 id = "country", time = "year",
+                 p = 1, q = 1)
+summary(result)
+```
+
+# The xtpqardl package
+
+The `xtpqardl` package implements panel quantile ARDL with PMG, MG, and DFE
+estimators across multiple quantiles \citep{Cho2015, Bildirici2022}.
+
+```{r xtpqardl-example}
+library(xtpqardl)
+
+result <- xtpqardl(y ~ x1, data = panel_data,
+                   id = "country", time = "year", lr = c("x1"),
+                   tau = c(0.25, 0.5, 0.75), model = "pmg")
+summary(result)
+```
+
+# The xtcspqardl package
+
+The `xtcspqardl` package implements cross-sectionally augmented panel quantile
+ARDL with QCCEMG and CS-PQARDL estimators for panel data with cross-sectional
+dependence \citep{Pesaran2006cce, Chudik2015}.
+
+```{r xtcspqardl-example}
+library(xtcspqardl)
+
+result <- xtcspqardl(y ~ x1, data = panel_data,
+                     id = "country", time = "year",
+                     tau = 0.5, estimator = "qccemg")
+summary(result)
+```
+
+# Comparison with existing implementations
+
+The `ARDL` package \citep{Natsiopoulos2022} is the primary existing R
+implementation for ARDL bounds testing. It provides standard linear ARDL
+estimation, automatic lag selection, and the PSS F- and t-bounds tests. However,
+it does not support:
+
+- **Bootstrap bounds testing** (provided by `aardl` via \citealt{McNown2018})
+- **Augmented ARDL** for degenerate cases (provided by `aardl` via \citealt{Sam2019})
+- **Rolling/recursive ARDL** for structural stability (provided by `rardl`)
+- **Nonlinear ARDL** with asymmetric decompositions (provided by `aardl`, `fbnardl`, `mtnardl`, `pnardl`)
+- **Fourier approximations** for smooth breaks (provided by `fbnardl`, `fqardl`)
+- **Quantile ARDL** (provided by `qardlr`, `fqardl`, `xtpqardl`, `xtcspqardl`)
+- **Panel ARDL/NARDL** (provided by `pnardl`, `xtpqardl`, `xtcspqardl`)
+
+The `nardl` package on CRAN implements basic nonlinear ARDL but lacks bootstrap
+inference, Fourier terms, and panel extensions. The `dynamac` package provides
+dynamic simulation from ARDL models but not bounds testing or nonlinear variants.
+
+The `ardlverse` ecosystem thus represents the most comprehensive ARDL toolkit
+available in R, covering linear, nonlinear, quantile, Fourier, bootstrap, and
+panel extensions in a unified framework.
+
+# Summary
+
+The `ardlverse` ecosystem provides nine packages that collectively offer the most
+comprehensive ARDL modeling toolkit in any statistical software environment. The
+packages cover augmented ARDL, rolling/recursive ARDL, Fourier NARDL, bootstrap
+NARDL, multiple-threshold NARDL, quantile ARDL, Fourier quantile ARDL, panel
+NARDL, panel quantile ARDL, and cross-sectionally augmented panel quantile ARDL.
+All packages are available on CRAN under GPL-3.
+
+\bibliography{paper}

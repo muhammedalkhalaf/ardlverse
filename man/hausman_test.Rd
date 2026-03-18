@@ -28,7 +28,7 @@ A list containing:
 \item{difference}{Coefficient differences}
 }
 \examples{
-\dontrun{
+\donttest{
 data <- generate_panel_data(n_groups = 10, n_time = 50)
 
 pmg <- panel_ardl(gdp ~ inflation + investment, data = data,

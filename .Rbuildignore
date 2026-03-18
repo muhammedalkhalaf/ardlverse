@@ -1,0 +1,9 @@
+^\.Rproj\.user$
+^.*\.Rproj$
+^\.Rhistory$
+^cran-comments\.md$
+^README\.Rmd$
+^\.git$
+^\.gitignore$
+^\.github$
+^create_data\.R$

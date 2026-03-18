@@ -18,7 +18,7 @@ pnardl(formula, data, id, time, p = 1, q = 1,
 \method{summary}{pnardl}(object, ...)
 }
 \arguments{
-\item{formula}{A formula specifying the model: y ~ x1 + x2 + ...}
+\item{formula}{A formula specifying the model: gdp ~ investment + trade + ...}
 \item{data}{A data frame in long panel format}
 \item{id}{Character. Name of the group/panel identifier variable}
 \item{time}{Character. Name of the time variable}
@@ -66,35 +66,35 @@ Pesaran, M. H., Shin, Y., & Smith, R. P. (1999). Pooled mean group estimation
 of dynamic heterogeneous panels. Journal of the American Statistical Association.
 }
 \examples{
-\dontrun{
+\donttest{
 # Generate panel data
-data <- generate_panel_data(N = 20, T = 50)
+data <- generate_panel_data(n_groups = 20, n_time = 50)
 
 # Panel NARDL with PMG estimator
 result <- pnardl(
-  y ~ x1 + x2,
+  gdp ~ investment + trade,
   data = data,
-  id = "id",
-  time = "time",
+  id = "country",
+  time = "year",
   estimator = "pmg"
 )
 summary(result)
 
 # Panel NARDL with MG estimator
 result_mg <- pnardl(
-  y ~ x1,
+  gdp ~ investment,
   data = data,
-  id = "id",
-  time = "time",
+  id = "country",
+  time = "year",
   estimator = "mg"
 )
 
 # Panel NARDL with bootstrap standard errors
 result_boot <- pnardl(
-  y ~ x1,
+  gdp ~ investment,
   data = data,
-  id = "id",
-  time = "time",
+  id = "country",
+  time = "year",
   bootstrap = TRUE,
   nboot = 200
 )

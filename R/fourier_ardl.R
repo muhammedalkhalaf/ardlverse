@@ -11,7 +11,7 @@
 #'
 #' where K is the number of frequencies and T is the sample size.
 #'
-#' @param formula A formula specifying the model: y ~ x1 + x2 + ...
+#' @param formula A formula specifying the model: gdp ~ investment + trade + ...
 #' @param data A data frame containing the time series data
 #' @param p Integer. Number of lags for dependent variable (default: 1)
 #' @param q Integer or vector. Number of lags for independent variables (default: 1)
@@ -43,7 +43,7 @@
 #' 74(4), 574-599.
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' # Load example data
 #' data(macro_data)
 #'

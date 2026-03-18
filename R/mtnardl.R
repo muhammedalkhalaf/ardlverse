@@ -16,7 +16,7 @@
 #'   \item Large increases (> 2\%)
 #' }
 #'
-#' @param formula A formula specifying the model: y ~ x1 + x2 + ...
+#' @param formula A formula specifying the model: gdp ~ investment + trade + ...
 #' @param data A data frame containing the time series data
 #' @param thresholds Numeric vector of threshold values (default: c(0))
 #' @param p Integer. Number of lags for dependent variable (default: 1)
@@ -45,16 +45,16 @@
 #' In Festschrift in Honor of Peter Schmidt (pp. 281-314). Springer.
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' # Generate example data
 #' data <- generate_oil_data(n = 300)
 #'
 #' # Standard NARDL (single threshold at 0)
-#' result1 <- mtnardl(consumption ~ oil_price, data = data)
+#' result1 <- mtnardl(gasoline ~ oil_price, data = data)
 #'
 #' # Multiple thresholds for different shock sizes
 #' result2 <- mtnardl(
-#'   consumption ~ oil_price,
+#'   gasoline ~ oil_price,
 #'   data = data,
 #'   thresholds = c(-0.05, 0, 0.05)
 #' )
@@ -62,7 +62,7 @@
 #'
 #' # Auto-select optimal thresholds
 #' result3 <- mtnardl(
-#'   consumption ~ oil_price,
+#'   gasoline ~ oil_price,
 #'   data = data,
 #'   auto_select = TRUE,
 #'   n_thresholds = 2
@@ -126,7 +126,7 @@ mtnardl <- function(formula, data, thresholds = c(0), p = 1, q = 1, case = 3,
   # Lagged differences of dependent variable
   dy_lags <- matrix(NA, n_valid, p)
   for (i in 1:p) {
-    dy_lags[, i] <- diff(y)[(max_lag - i):(n - 1 - i)]
+    dy_lags[, i] <- diff(y)[(max_lag - i + 1):(n - i)]
   }
   colnames(dy_lags) <- paste0("d.", y_var, ".l", 1:p)
   
@@ -426,7 +426,15 @@ mtnardl <- function(formula, data, thresholds = c(0), p = 1, q = 1, case = 3,
   
   F_upper <- cv$F_I1["5%"]
   F_lower <- cv$F_I0["5%"]
-  
+
+  if (length(F_upper) == 0 || is.na(F_upper) ||
+      length(F_lower) == 0 || is.na(F_lower) ||
+      length(F_stat)  == 0 || is.na(F_stat)) {
+    return(list(decision = "INCONCLUSIVE",
+                message   = "Critical values or F-statistic unavailable",
+                method    = "asymptotic"))
+  }
+
   if (F_stat > F_upper) {
     decision <- "COINTEGRATION"
     message <- "Cointegration confirmed: F > I(1) upper bound"
@@ -608,6 +616,8 @@ plot.mtnardl <- function(x, type = c("multipliers", "asymmetry"), ...) {
     n_vars <- ncol(mult)
     colors <- grDevices::rainbow(n_vars)
     
+    oldpar <- graphics::par(no.readonly = TRUE)
+    on.exit(graphics::par(oldpar))
     graphics::par(mfrow = c(1, 1))
     graphics::matplot(horizons, mult, type = "l", lty = 1, col = colors,
                      xlab = "Horizon", ylab = "Cumulative Multiplier",

@@ -1,19 +1,13 @@
-#' @title Simulated Macroeconomic Panel Data
-#' @description A simulated panel dataset of macroeconomic variables
-#'   for 10 countries over 50 years.
+#' Simulated Macroeconomic Panel Data
 #'
-#' @format A data frame with 500 rows and 6 variables:
-#' \describe{
-#'   \item{country}{Country identifier (1-10)}
-#'   \item{year}{Year (1970-2019)}
-#'   \item{gdp}{Log GDP per capita}
-#'   \item{inflation}{Inflation rate}
-#'   \item{investment}{Gross capital formation (% of GDP)}
-#'   \item{trade}{Trade openness (exports + imports as % of GDP)}
-#' }
+#' A simulated panel dataset of macroeconomic variables
+#' for 10 countries over 50 years.
+#'
+#' @format A data frame with 500 rows and 6 variables: country, year, gdp, 
+#'   inflation, investment, trade.
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' data(macro_panel)
 #' head(macro_panel)
 #'
@@ -31,49 +25,32 @@
 "macro_panel"
 
 
-#' @title Time Series Macroeconomic Data
-#' @description A simulated time series dataset of macroeconomic variables
-#'   for a single country over 100 quarters.
+#' Time Series Macroeconomic Data
 #'
-#' @format A data frame with 100 rows and 5 variables:
-#' \describe{
-#'   \item{quarter}{Quarter number (1-100)}
-#'   \item{gdp}{Log real GDP}
-#'   \item{inflation}{Inflation rate}
-#'   \item{investment}{Investment growth rate}
-#'   \item{trade}{Trade balance (% of GDP)}
-#' }
+#' A simulated time series dataset of macroeconomic variables
+#' for a single country over 100 quarters.
+#'
+#' @format A data frame with 100 rows and 5 variables: quarter, gdp, inflation,
+#'   investment, trade.
 #'
 #' @examples
-#' \dontrun{
 #' data(macro_data)
-#'
-#' # Bootstrap bounds test
-#' test <- boot_ardl(
-#'   gdp ~ inflation + investment,
-#'   data = macro_data,
-#'   p = 2, q = 2
-#' )
-#' }
+#' head(macro_data)
 #'
 #' @source Simulated data for demonstration purposes
 "macro_data"
 
 
-#' @title Oil Price and Gasoline Data
-#' @description Weekly data on oil prices and retail gasoline prices,
-#'   suitable for demonstrating asymmetric price transmission.
+#' Oil Price and Gasoline Data
 #'
-#' @format A data frame with 200 rows and 4 variables:
-#' \describe{
-#'   \item{week}{Week number (1-200)}
-#'   \item{gasoline}{Retail gasoline price (cents/gallon)}
-#'   \item{oil_price}{Crude oil price ($/barrel)}
-#'   \item{exchange_rate}{USD exchange rate index}
-#' }
+#' Weekly data on oil prices and retail gasoline prices,
+#' suitable for demonstrating asymmetric price transmission.
+#'
+#' @format A data frame with 200 rows and 4 variables: week, gasoline,
+#'   oil_price, exchange_rate.
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' data(oil_data)
 #'
 #' # Test for asymmetric price transmission

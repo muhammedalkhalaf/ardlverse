@@ -18,7 +18,7 @@ fourier_ardl(formula, data, p = 1, q = 1, k = 1, case = 3,
 \method{plot}{fourier_ardl}(x, which = "both", ...)
 }
 \arguments{
-  \item{formula}{A formula specifying the model: y ~ x1 + x2 + ...}
+  \item{formula}{A formula specifying the model: gdp ~ investment + trade + ...}
   \item{data}{A data frame containing the time series data}
   \item{p}{Integer. Number of lags for dependent variable (default: 1)}
   \item{q}{Integer or vector. Number of lags for independent variables (default: 1)}
@@ -61,7 +61,7 @@ approximate smooth breaks. Oxford Bulletin of Economics and Statistics,
 74(4), 574-599.
 }
 \examples{
-\dontrun{
+\donttest{
 # Generate example data
 data <- generate_ts_data(n = 100)
 

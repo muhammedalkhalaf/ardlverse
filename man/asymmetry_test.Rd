@@ -28,7 +28,7 @@ A data frame with test results by quantile:
 \item{p_value}{P-value}
 }
 \examples{
-\dontrun{
+\donttest{
 data <- generate_oil_data(n = 200)
 
 model <- qnardl(

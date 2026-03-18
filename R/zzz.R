@@ -1,6 +1,7 @@
 #' @title Package Startup
 #' @description Functions run on package load
 #' @keywords internal
+#' @importFrom stats as.formula lm.fit sd
 
 .onLoad <- function(libname, pkgname) {
   # Set default options

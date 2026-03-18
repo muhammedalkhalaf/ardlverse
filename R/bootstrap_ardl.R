@@ -13,7 +13,7 @@
 #'   \item \strong{F-overall}: Joint test including the dependent variable lag
 #' }
 #'
-#' @param formula A formula specifying the model: y ~ x1 + x2 + ...
+#' @param formula A formula specifying the model: gdp ~ investment + trade + ...
 #' @param data A data frame containing the time series data
 #' @param p Integer. Number of lags for dependent variable (default: 1)
 #' @param q Integer or vector. Number of lags for independent variables (default: 1)
@@ -53,7 +53,7 @@
 #' to the analysis of level relationships. Journal of Applied Econometrics, 16(3), 289-326.
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' # Load example data
 #' data(macro_data)
 #'
@@ -203,7 +203,7 @@ boot_ardl <- function(formula, data, p = 1, q = 1, case = 3,
   
   # Combine
   result <- data.frame(
-    dy = dy,
+    dy = dy[-1],
     y_lag1 = y_lag1[-1],
     X_levels[-1, , drop = FALSE],
     X_diff[-1, , drop = FALSE]

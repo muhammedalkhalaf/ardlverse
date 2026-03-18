@@ -18,7 +18,7 @@ mtnardl(formula, data, thresholds = c(0), p = 1, q = 1, case = 3,
 \method{plot}{mtnardl}(x, type = c("multipliers", "asymmetry"), ...)
 }
 \arguments{
-\item{formula}{A formula specifying the model: y ~ x1 + x2 + ...}
+\item{formula}{A formula specifying the model: gdp ~ investment + trade + ...}
 \item{data}{A data frame containing the time series data}
 \item{thresholds}{Numeric vector of threshold values (default: c(0))}
 \item{p}{Integer. Number of lags for dependent variable (default: 1)}
@@ -63,16 +63,16 @@ cointegration and dynamic multipliers in a nonlinear ARDL framework.
 In Festschrift in Honor of Peter Schmidt (pp. 281-314). Springer.
 }
 \examples{
-\dontrun{
+\donttest{
 # Generate example data
 data <- generate_oil_data(n = 300)
 
 # Standard NARDL (single threshold at 0)
-result1 <- mtnardl(consumption ~ oil_price, data = data)
+result1 <- mtnardl(gasoline ~ oil_price, data = data)
 
 # Multiple thresholds for different shock sizes
 result2 <- mtnardl(
-  consumption ~ oil_price,
+  gasoline ~ oil_price,
   data = data,
   thresholds = c(-0.05, 0, 0.05)
 )
@@ -81,7 +81,7 @@ plot(result2, type = "multipliers")
 
 # Auto-select optimal thresholds
 result3 <- mtnardl(
-  consumption ~ oil_price,
+  gasoline ~ oil_price,
   data = data,
   auto_select = TRUE,
   n_thresholds = 2

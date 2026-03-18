@@ -61,7 +61,7 @@ Economic Modelling.
 }
 \keyword{package}
 \examples{
-\dontrun{
+\donttest{
 # Panel ARDL
 data <- generate_panel_data()
 model <- panel_ardl(gdp ~ inflation + investment, data = data,

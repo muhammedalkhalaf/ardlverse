@@ -20,7 +20,7 @@
 #' @return An object of class "ardl_diagnostics" containing all test results
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' # Estimate model
 #' model <- fourier_ardl(gdp ~ investment, data = macro_data, p = 2, q = 2)
 #'

@@ -16,7 +16,7 @@
 #'     are homogeneous except fixed effects
 #' }
 #'
-#' @param formula A formula specifying the model: y ~ x1 + x2 + ... | group
+#' @param formula A formula specifying the model: gdp ~ investment + trade + ... | group
 #' @param data A data frame in long panel format
 #' @param id Character. Name of the group/panel identifier variable
 #' @param time Character. Name of the time variable
@@ -48,16 +48,16 @@
 #' of dynamic heterogeneous panels. Journal of the American Statistical Association.
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' # Generate panel data
-#' data <- generate_panel_data(N = 20, T = 50)
+#' data <- generate_panel_data(n_groups = 20, n_time = 50)
 #'
 #' # Panel NARDL with PMG estimator
 #' result <- pnardl(
-#'   y ~ x1 + x2,
+#'   gdp ~ investment + trade,
 #'   data = data,
-#'   id = "id",
-#'   time = "time",
+#'   id = "country",
+#'   time = "year",
 #'   estimator = "pmg"
 #' )
 #' summary(result)

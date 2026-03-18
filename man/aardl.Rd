@@ -17,7 +17,7 @@ aardl(formula, data, p = 1, q = 1, case = 3,
 \method{summary}{aardl}(object, ...)
 }
 \arguments{
-\item{formula}{A formula specifying the model: y ~ x1 + x2 + ...}
+\item{formula}{A formula specifying the model: gdp ~ investment + trade + ...}
 \item{data}{A data frame containing the time series data}
 \item{p}{Integer. Number of lags for dependent variable (default: 1)}
 \item{q}{Integer or vector. Number of lags for independent variables (default: 1)}
@@ -63,20 +63,20 @@ McNown, R., Sam, C. Y., & Goh, S. K. (2018). Bootstrapping the autoregressive
 distributed lag test for cointegration. Applied Economics, 50(13), 1509-1521.
 }
 \examples{
-\dontrun{
+\donttest{
 # Generate example data
 data <- generate_ts_data(n = 200)
 
 # Standard Augmented ARDL
-result <- aardl(y ~ x1 + x2, data = data, p = 2, q = 2, case = 3)
+result <- aardl(gdp ~ investment + trade, data = data, p = 2, q = 2, case = 3)
 summary(result)
 
 # Augmented NARDL (nonlinear)
-result_nardl <- aardl(y ~ x1 + x2, data = data, type = "nardl")
+result_nardl <- aardl(gdp ~ investment + trade, data = data, type = "nardl")
 summary(result_nardl)
 
 # Fourier Augmented ARDL with bootstrap
-result_fb <- aardl(y ~ x1, data = data, type = "fbootstrap", nboot = 1000)
+result_fb <- aardl(gdp ~ investment, data = data, type = "fbootstrap", nboot = 1000)
 }
 }
 \seealso{

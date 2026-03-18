@@ -22,7 +22,7 @@ A list containing:
 \item{cv_F}{Critical values for F-test by significance level}
 }
 \examples{
-\dontrun{
+\donttest{
 data <- generate_ts_data(n = 100)
 
 model <- fourier_ardl(

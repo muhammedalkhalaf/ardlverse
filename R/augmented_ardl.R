@@ -24,7 +24,7 @@
 #'   \item Fourier Bootstrap NARDL
 #' }
 #'
-#' @param formula A formula specifying the model: y ~ x1 + x2 + ...
+#' @param formula A formula specifying the model: gdp ~ investment + trade + ...
 #' @param data A data frame containing the time series data
 #' @param p Integer. Number of lags for dependent variable (default: 1)
 #' @param q Integer or vector. Number of lags for independent variables (default: 1)
@@ -56,20 +56,20 @@
 #' distributed lag test for cointegration. Applied Economics, 50(13), 1509-1521.
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' # Generate example data
 #' data <- generate_ts_data(n = 200)
 #'
 #' # Standard Augmented ARDL
-#' result <- aardl(y ~ x1 + x2, data = data, p = 2, q = 2, case = 3)
+#' result <- aardl(gdp ~ investment + trade, data = data, p = 2, q = 2, case = 3)
 #' summary(result)
 #'
 #' # Augmented NARDL (nonlinear)
-#' result_nardl <- aardl(y ~ x1 + x2, data = data, type = "nardl")
+#' result_nardl <- aardl(gdp ~ investment + trade, data = data, type = "nardl")
 #' summary(result_nardl)
 #'
 #' # Fourier Augmented ARDL
-#' result_fourier <- aardl(y ~ x1 + x2, data = data, type = "fourier", fourier_k = 2)
+#' result_fourier <- aardl(gdp ~ investment + trade, data = data, type = "fourier", fourier_k = 2)
 #' summary(result_fourier)
 #' }
 #'
@@ -140,7 +140,7 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
   # Lagged differences of dependent variable
   dy_lags <- matrix(NA, n_valid, p)
   for (i in 1:p) {
-    dy_lags[, i] <- diff(y)[(max_lag - i):(n - 1 - i)]
+    dy_lags[, i] <- diff(y)[(max_lag - i + 1):(n - i)]
   }
   colnames(dy_lags) <- paste0("d.", y_var, ".l", 1:p)
   

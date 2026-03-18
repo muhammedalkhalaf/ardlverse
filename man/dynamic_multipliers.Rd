@@ -27,7 +27,7 @@ A data frame with:
 \item{type}{Either "Positive" or "Negative"}
 }
 \examples{
-\dontrun{
+\donttest{
 data <- generate_oil_data(n = 200)
 
 model <- qnardl(

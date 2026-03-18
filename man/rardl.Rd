@@ -18,7 +18,7 @@ rardl(formula, data, method = c("rolling", "recursive"),
 \method{plot}{rardl}(x, type = c("F", "ec", "lr", "all"), ...)
 }
 \arguments{
-\item{formula}{A formula specifying the model: y ~ x1 + x2 + ...}
+\item{formula}{A formula specifying the model: gdp ~ investment + trade + ...}
 \item{data}{A data frame containing the time series data}
 \item{method}{Character. Either "rolling" or "recursive" (default: "rolling")}
 \item{window}{Integer. Window size for rolling method (default: 50)}
@@ -64,17 +64,17 @@ Pesaran, M. H., Shin, Y., & Smith, R. J. (2001). Bounds testing approaches
 to the analysis of level relationships. Journal of Applied Econometrics, 16(3), 289-326.
 }
 \examples{
-\dontrun{
+\donttest{
 # Generate example data
 data <- generate_ts_data(n = 300)
 
 # Rolling ARDL with 60-observation window
-roll_result <- rardl(y ~ x1 + x2, data = data, method = "rolling", window = 60)
+roll_result <- rardl(gdp ~ investment + trade, data = data, method = "rolling", window = 60)
 plot(roll_result, type = "all")
 summary(roll_result)
 
 # Recursive ARDL
-rec_result <- rardl(y ~ x1 + x2, data = data, method = "recursive", min_obs = 50)
+rec_result <- rardl(gdp ~ investment + trade, data = data, method = "recursive", min_obs = 50)
 plot(rec_result, type = "F")
 }
 }

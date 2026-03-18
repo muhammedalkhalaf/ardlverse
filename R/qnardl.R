@@ -20,7 +20,7 @@
 #' \deqn{x^+_t = \sum_{j=1}^{t} \max(\Delta x_j, 0)}
 #' \deqn{x^-_t = \sum_{j=1}^{t} \min(\Delta x_j, 0)}
 #'
-#' @param formula A formula specifying the model: y ~ x1 + x2 + ...
+#' @param formula A formula specifying the model: gdp ~ investment + trade + ...
 #' @param data A data frame containing the time series data
 #' @param tau Numeric vector of quantiles to estimate (default: c(0.25, 0.5, 0.75))
 #' @param p Integer. Number of lags for dependent variable (default: 1)
@@ -52,7 +52,7 @@
 #' In Festschrift in Honor of Peter Schmidt (pp. 281-314). Springer.
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' # Load example data
 #' data(oil_data)
 #'

@@ -46,7 +46,7 @@ An object of class "ardl_diagnostics" containing:
 \item{residuals}{Model residuals}
 }
 \examples{
-\dontrun{
+\donttest{
 # Estimate a model
 data <- generate_ts_data(n = 100)
 model <- fourier_ardl(gdp ~ investment, data = data)

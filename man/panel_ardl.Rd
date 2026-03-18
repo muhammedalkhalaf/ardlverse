@@ -18,7 +18,7 @@ panel_ardl(formula, data, id, time, p = 1, q = 1,
 \method{print}{panel_ardl}(x, ...)
 }
 \arguments{
-  \item{formula}{A formula specifying the model: y ~ x1 + x2 + ...}
+  \item{formula}{A formula specifying the model: gdp ~ investment + trade + ...}
   \item{data}{A data frame containing panel data}
   \item{id}{Character string specifying the group/panel identifier variable}
   \item{time}{Character string specifying the time variable}
@@ -65,7 +65,7 @@ of dynamic heterogeneous panels. Journal of the American Statistical Association
 94(446), 621-634.
 }
 \examples{
-\dontrun{
+\donttest{
 # Generate example data
 data <- generate_panel_data(n_groups = 10, n_time = 50)
 

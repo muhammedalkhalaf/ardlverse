@@ -18,7 +18,7 @@
 #'   \item Changes in error correction speed
 #' }
 #'
-#' @param formula A formula specifying the model: y ~ x1 + x2 + ...
+#' @param formula A formula specifying the model: gdp ~ investment + trade + ...
 #' @param data A data frame containing the time series data
 #' @param method Character. Either "rolling" or "recursive" (default: "rolling")
 #' @param window Integer. Window size for rolling method (default: 50)
@@ -45,7 +45,7 @@
 #' to the analysis of level relationships. Journal of Applied Econometrics, 16(3), 289-326.
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' # Generate example data with structural break
 #' n <- 300
 #' data <- generate_ts_data(n = n)
@@ -53,12 +53,12 @@
 #' data$y[151:n] <- data$y[151:n] + 5
 #'
 #' # Rolling ARDL
-#' roll_result <- rardl(y ~ x1 + x2, data = data, method = "rolling", window = 60)
+#' roll_result <- rardl(gdp ~ investment + trade, data = data, method = "rolling", window = 60)
 #' plot(roll_result)
 #' summary(roll_result)
 #'
 #' # Recursive ARDL
-#' rec_result <- rardl(y ~ x1 + x2, data = data, method = "recursive", min_obs = 50)
+#' rec_result <- rardl(gdp ~ investment + trade, data = data, method = "recursive", min_obs = 50)
 #' plot(rec_result)
 #' }
 #'
@@ -226,7 +226,7 @@ rardl <- function(formula, data, method = c("rolling", "recursive"),
   # Lagged differences
   dy_lags <- matrix(NA, n_valid, p)
   for (i in 1:p) {
-    dy_lags[, i] <- diff(y)[(max_lag - i):(n - 1 - i)]
+    dy_lags[, i] <- diff(y)[(max_lag - i + 1):(n - i)]
   }
   
   # Independent variables
@@ -490,6 +490,8 @@ plot.rardl <- function(x, type = c("F", "ec", "lr", "all"), ...) {
   n <- length(x$F_stats)
   idx <- 1:n
   
+  oldpar <- graphics::par(no.readonly = TRUE)
+  on.exit(graphics::par(oldpar))
   if (type == "all") {
     graphics::par(mfrow = c(3, 1), mar = c(4, 4, 2, 1))
   } else {

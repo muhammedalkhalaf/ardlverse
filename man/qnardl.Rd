@@ -19,7 +19,7 @@ qnardl(formula, data, tau = c(0.25, 0.5, 0.75),
 \method{plot}{qnardl}(x, var = NULL, type = "long_run", ...)
 }
 \arguments{
-  \item{formula}{A formula specifying the model: y ~ x1 + x2 + ...}
+  \item{formula}{A formula specifying the model: gdp ~ investment + trade + ...}
   \item{data}{A data frame containing the time series data}
   \item{tau}{Numeric vector of quantiles to estimate (default: c(0.25, 0.5, 0.75))}
   \item{p}{Integer. Number of lags for dependent variable (default: 1)}
@@ -67,7 +67,7 @@ cointegration and dynamic multipliers in a nonlinear ARDL framework.
 In Festschrift in Honor of Peter Schmidt (pp. 281-314). Springer.
 }
 \examples{
-\dontrun{
+\donttest{
 # Generate oil price data
 data <- generate_oil_data(n = 200)
 

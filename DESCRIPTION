@@ -40,10 +40,3 @@ Suggests: testthat (>= 3.0.0), knitr, rmarkdown, covr
 RoxygenNote: 7.3.3
 Config/testthat/edition: 3
 NeedsCompilation: no
-Packaged: 2026-03-13 20:46:39 UTC; acad_
-Author: Muhammad Abdullah Alkhalaf [aut, cre] (ORCID:
-    <https://orcid.org/0009-0002-2677-9246>),
-  Merwan Roudane [ctb] (Original Stata implementations)
-Maintainer: Muhammad Abdullah Alkhalaf <muhammedalkhalaf@gmail.com>
-Repository: CRAN
-Date/Publication: 2026-03-14 17:00:02 UTC

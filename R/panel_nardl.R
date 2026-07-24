@@ -36,6 +36,9 @@
 #'   \item \code{short_run}: Short-run coefficients
 #'   \item \code{ec_coef}: Error correction coefficient
 #'   \item \code{asymmetry_test}: Wald test for long-run asymmetry
+#'   \item \code{residuals}: stacked residuals from the model
+#'   \item \code{fitted}: fitted values
+#'   \item \code{group_ids}: vector of group identifiers
 #'   \item \code{unit_results}: Individual unit estimation results (for MG)
 #'   \item \code{hausman}: Hausman test comparing PMG vs MG
 #' }
@@ -75,37 +78,37 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
                    threshold = 0,
                    effect = c("individual", "time", "twoways"),
                    bootstrap = FALSE, nboot = 500) {
-  
+
   estimator <- match.arg(estimator)
   effect <- match.arg(effect)
-  
+
   # Parse formula
   formula_vars <- all.vars(formula)
   y_var <- formula_vars[1]
   x_vars <- formula_vars[-1]
   k <- length(x_vars)
-  
+
   # Handle q
   if (length(q) == 1) q <- rep(q, k)
-  
+
   # Get panel structure
   data <- data[order(data[[id]], data[[time]]), ]
   groups <- unique(data[[id]])
   N <- length(groups)
   T_total <- nrow(data) / N
-  
+
   # Decompose variables into positive and negative components
   data_decomp <- .panel_nardl_decompose(data, x_vars, id, time, threshold)
-  
+
   # New variable names
   x_vars_pos <- paste0(x_vars, "_pos")
   x_vars_neg <- paste0(x_vars, "_neg")
   x_vars_all <- c(x_vars_pos, x_vars_neg)
   k_total <- length(x_vars_all)
-  
+
   # Estimate based on chosen estimator
   if (estimator == "pmg") {
-    result <- .pnardl_pmg(data_decomp, y_var, x_vars_all, x_vars, id, time, 
+    result <- .pnardl_pmg(data_decomp, y_var, x_vars_all, x_vars, id, time,
                           p, q, effect, k)
   } else if (estimator == "mg") {
     result <- .pnardl_mg(data_decomp, y_var, x_vars_all, x_vars, id, time,
@@ -114,7 +117,7 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
     result <- .pnardl_dfe(data_decomp, y_var, x_vars_all, x_vars, id, time,
                           p, q, effect, k)
   }
-  
+
   # Bootstrap standard errors if requested
   if (bootstrap) {
     boot_se <- .pnardl_bootstrap(data_decomp, y_var, x_vars_all, id, time,
@@ -123,17 +126,17 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
     result$ci_lower <- result$coefficients - 1.96 * boot_se
     result$ci_upper <- result$coefficients + 1.96 * boot_se
   }
-  
+
   # Asymmetry test
   result$asymmetry_test <- .test_panel_asymmetry(result, x_vars, k)
-  
+
   # Hausman test (PMG vs MG)
   if (estimator == "pmg") {
     mg_result <- .pnardl_mg(data_decomp, y_var, x_vars_all, x_vars, id, time,
                             p, q, effect, k, groups)
     result$hausman <- .panel_hausman_test(result, mg_result)
   }
-  
+
   # Add metadata
   result$call <- match.call()
   result$estimator <- estimator
@@ -147,7 +150,7 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
   result$x_vars <- x_vars
   result$y_var <- y_var
   result$groups <- groups
-  
+
   class(result) <- "pnardl"
   return(result)
 }
@@ -157,27 +160,27 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
 #' @keywords internal
 .panel_nardl_decompose <- function(data, x_vars, id, time, threshold) {
   groups <- unique(data[[id]])
-  
+
   result_list <- list()
-  
+
   for (g in groups) {
     group_data <- data[data[[id]] == g, ]
     group_data <- group_data[order(group_data[[time]]), ]
-    
+
     for (v in x_vars) {
       x <- group_data[[v]]
       dx <- c(0, diff(x))
-      
+
       pos_changes <- ifelse(dx > threshold, dx - threshold, 0)
       neg_changes <- ifelse(dx < -threshold, dx + threshold, 0)
-      
+
       group_data[[paste0(v, "_pos")]] <- cumsum(pos_changes)
       group_data[[paste0(v, "_neg")]] <- cumsum(neg_changes)
     }
-    
+
     result_list[[as.character(g)]] <- group_data
   }
-  
+
   do.call(rbind, result_list)
 }
 
@@ -188,56 +191,58 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
   groups <- unique(data[[id]])
   N <- length(groups)
   k_total <- length(x_vars)
-  
+
   # Expand q for pos/neg variables
   if (length(q) == k) {
     q <- rep(q, 2)
   }
-  
+
   # Initialize long-run coefficients (to be estimated pooled)
   lr_init <- rep(0, k_total)
-  
+
   # Iterative PMG estimation
   max_iter <- 100
   tol <- 1e-6
-  
+
   lr_coefs <- lr_init
-  
+
   for (iter in 1:max_iter) {
     lr_old <- lr_coefs
-    
+
     # Step 1: Estimate short-run for each group, given long-run
     sr_results <- list()
     ec_coefs <- numeric(N)
-    
+
     for (i in seq_along(groups)) {
       g <- groups[i]
       group_data <- data[data[[id]] == g, ]
       group_data <- group_data[order(group_data[[time]]), ]
-      
+
       # Build error correction term
       y <- group_data[[y_var]]
       X <- as.matrix(group_data[, x_vars, drop = FALSE])
       n <- length(y)
-      
+
       # EC term: y - sum(lr * x)
       ec_term <- y - X %*% lr_coefs
-      
+
       # Build ARDL model with EC term
       max_lag <- max(p, max(q))
       valid_idx <- (max_lag + 1):n
-      
+
       dy <- diff(y)[(max_lag):(n-1)]
       ec_lag <- ec_term[valid_idx - 1]
-      
+
       # Lagged differences
       design_list <- list(ec_lag = ec_lag)
-      
+
       # Lagged dy
-      for (j in 1:p) {
-        design_list[[paste0("dy_l", j)]] <- diff(y)[(max_lag - j):(n - 1 - j)]
+      if (p > 1) {
+        for (j in 1:(p - 1)) {
+          design_list[[paste0("dy_l", j)]] <- diff(y)[(max_lag - j):(n - 1 - j)]
+        }
       }
-      
+
       # Contemporaneous and lagged dx
       for (j in 1:k_total) {
         dx_j <- diff(X[, j])
@@ -245,47 +250,54 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
           design_list[[paste0("dx", j, "_l", l)]] <- dx_j[(max_lag - l):(n - 1 - l)]
         }
       }
-      
+
       design <- do.call(cbind, design_list)
-      
+
       # Add intercept
       design <- cbind(design, intercept = 1)
-      
+
       # Estimate
       model_g <- stats::lm(dy ~ design - 1)
       coefs_g <- stats::coef(model_g)
-      
+
       ec_coefs[i] <- coefs_g[1]
       sr_results[[i]] <- list(coefs = coefs_g, model = model_g)
     }
-    
+
     # Step 2: Update long-run coefficients (concentrated likelihood)
     # Use average EC coefficient
     phi_avg <- mean(ec_coefs)
-    
+
     # Stack data for pooled long-run estimation
     lr_data <- .stack_lr_data(data, y_var, x_vars, id, time, phi_avg, sr_results, groups)
-    
+
     if (nrow(lr_data$Y) > 0) {
       lr_model <- stats::lm(lr_data$Y ~ lr_data$X - 1)
       lr_coefs <- stats::coef(lr_model)
     }
-    
+
     # Check convergence
     if (max(abs(lr_coefs - lr_old)) < tol) break
   }
-  
+
   # Compute standard errors
   vcov_lr <- stats::vcov(lr_model)
   se_lr <- sqrt(diag(vcov_lr))
-  
+
   # Average short-run coefficients
   sr_avg <- colMeans(do.call(rbind, lapply(sr_results, function(x) x$coefs)))
-  
+
   # Separate long-run pos and neg
   lr_pos <- lr_coefs[1:k]
   lr_neg <- lr_coefs[(k+1):(2*k)]
-  
+
+  # Extract residuals and group IDs
+  all_resid <- unlist(lapply(sr_results, function(x) x$model$residuals))
+  all_fitted <- unlist(lapply(sr_results, function(x) x$model$fitted.values))
+  all_groups <- unlist(lapply(seq_along(sr_results), function(i) {
+    rep(groups[i], length(sr_results[[i]]$model$residuals))
+  }))
+
   list(
     coefficients = c(ec = mean(ec_coefs), lr_coefs, sr_avg[-1]),
     long_run = lr_coefs,
@@ -296,7 +308,10 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
     ec_by_unit = ec_coefs,
     se_lr = se_lr,
     convergence = list(iterations = iter, converged = iter < max_iter),
-    unit_results = sr_results
+    unit_results = sr_results,
+    residuals = all_resid,
+    fitted = all_fitted,
+    group_ids = all_groups
   )
 }
 
@@ -306,19 +321,19 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
 .pnardl_mg <- function(data, y_var, x_vars, orig_vars, id, time, p, q, effect, k, groups) {
   N <- length(groups)
   k_total <- length(x_vars)
-  
+
   if (length(q) == k) q <- rep(q, 2)
-  
+
   # Estimate for each group
   unit_results <- list()
   all_lr <- matrix(NA, N, k_total)
   all_ec <- numeric(N)
-  
+
   for (i in seq_along(groups)) {
     g <- groups[i]
     group_data <- data[data[[id]] == g, ]
     group_data <- group_data[order(group_data[[time]]), ]
-    
+
     tryCatch({
       result_g <- .estimate_unit_nardl(group_data, y_var, x_vars, p, q)
       unit_results[[i]] <- result_g
@@ -330,17 +345,24 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
       all_ec[i] <<- NA
     })
   }
-  
+
   # Average coefficients
   lr_avg <- colMeans(all_lr, na.rm = TRUE)
   lr_se <- apply(all_lr, 2, function(x) stats::sd(x, na.rm = TRUE) / sqrt(sum(!is.na(x))))
-  
+
   ec_avg <- mean(all_ec, na.rm = TRUE)
   ec_se <- stats::sd(all_ec, na.rm = TRUE) / sqrt(sum(!is.na(all_ec)))
-  
+
   lr_pos <- lr_avg[1:k]
   lr_neg <- lr_avg[(k+1):(2*k)]
-  
+
+  # Extract residuals and group IDs
+  all_resid <- unlist(lapply(unit_results, function(x) if(!is.null(x)) x$model$residuals else NULL))
+  all_fitted <- unlist(lapply(unit_results, function(x) if(!is.null(x)) x$model$fitted.values else NULL))
+  all_groups <- unlist(lapply(seq_along(unit_results), function(i) {
+    if(!is.null(unit_results[[i]])) rep(groups[i], length(unit_results[[i]]$model$residuals)) else NULL
+  }))
+
   list(
     coefficients = c(ec = ec_avg, lr_avg),
     long_run = lr_avg,
@@ -351,7 +373,10 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
     se_lr = lr_se,
     unit_results = unit_results,
     unit_lr = all_lr,
-    unit_ec = all_ec
+    unit_ec = all_ec,
+    residuals = all_resid,
+    fitted = all_fitted,
+    group_ids = all_groups
   )
 }
 
@@ -362,35 +387,38 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
   groups <- unique(data[[id]])
   N <- length(groups)
   k_total <- length(x_vars)
-  
+
   if (length(q) == k) q <- rep(q, 2)
-  
+
   # Create panel with fixed effects demeaning
   data_demeaned <- .demean_panel(data, y_var, x_vars, id)
-  
+
   # Stack all data
   all_data <- list()
   for (g in groups) {
     group_data <- data_demeaned[data_demeaned[[id]] == g, ]
     group_data <- group_data[order(group_data[[time]]), ]
-    
+
     y <- group_data[[y_var]]
     X <- as.matrix(group_data[, x_vars, drop = FALSE])
     n <- length(y)
-    
+
     max_lag <- max(p, max(q))
     valid_idx <- (max_lag + 1):n
-    
+
     dy <- diff(y)[(max_lag):(n-1)]
     y_lag <- y[valid_idx - 1]
     x_lag <- X[valid_idx - 1, , drop = FALSE]
-    
+
     # Lagged dy
-    dy_lags <- matrix(NA, length(valid_idx), p)
-    for (j in 1:p) {
-      dy_lags[, j] <- diff(y)[(max_lag - j):(n - 1 - j)]
+    dy_lags <- NULL
+    if (p > 1) {
+      dy_lags <- matrix(NA, length(valid_idx), p - 1)
+      for (j in 1:(p - 1)) {
+        dy_lags[, j] <- diff(y)[(max_lag - j):(n - 1 - j)]
+      }
     }
-    
+
     # Lagged dx
     dx_list <- list()
     for (j in 1:k_total) {
@@ -402,7 +430,7 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
       dx_list[[j]] <- dx_lags_j
     }
     dx_all <- do.call(cbind, dx_list)
-    
+
     all_data[[as.character(g)]] <- list(
       dy = dy,
       y_lag = y_lag,
@@ -411,29 +439,32 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
       dx_all = dx_all
     )
   }
-  
+
   # Stack
   dy_stack <- unlist(lapply(all_data, function(x) x$dy))
   design_stack <- do.call(rbind, lapply(all_data, function(x) {
     cbind(x$y_lag, x$x_lag, x$dy_lags, x$dx_all)
   }))
-  
+  group_ids_stack <- unlist(lapply(seq_along(all_data), function(i) {
+    rep(names(all_data)[i], length(all_data[[i]]$dy))
+  }))
+
   # Estimate
   model <- stats::lm(dy_stack ~ design_stack - 1)
   coefs <- stats::coef(model)
   vcov_mat <- stats::vcov(model)
   se <- sqrt(diag(vcov_mat))
-  
+
   ec_coef <- coefs[1]
   lr_coefs <- if (abs(ec_coef) > 1e-10) {
     -coefs[2:(1 + k_total)] / ec_coef
   } else {
     rep(NA, k_total)
   }
-  
+
   lr_pos <- lr_coefs[1:k]
   lr_neg <- lr_coefs[(k+1):(2*k)]
-  
+
   list(
     coefficients = coefs,
     long_run = lr_coefs,
@@ -442,7 +473,10 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
     ec_coef = ec_coef,
     se = se,
     model = model,
-    vcov = vcov_mat
+    vcov = vcov_mat,
+    residuals = model$residuals,
+    fitted = model$fitted.values,
+    group_ids = group_ids_stack
   )
 }
 
@@ -454,20 +488,22 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
   X <- as.matrix(data[, x_vars, drop = FALSE])
   n <- length(y)
   k <- ncol(X)
-  
+
   max_lag <- max(p, max(q))
   valid_idx <- (max_lag + 1):n
-  
+
   dy <- diff(y)[(max_lag):(n-1)]
   y_lag <- y[valid_idx - 1]
   x_lag <- X[valid_idx - 1, , drop = FALSE]
-  
+
   # Build design
   design <- cbind(y_lag, x_lag)
-  
+
   # Add lagged differences
-  for (j in 1:p) {
-    design <- cbind(design, diff(y)[(max_lag - j):(n - 1 - j)])
+  if (p > 1) {
+    for (j in 1:(p - 1)) {
+      design <- cbind(design, diff(y)[(max_lag - j):(n - 1 - j)])
+    }
   }
   
   for (j in 1:k) {

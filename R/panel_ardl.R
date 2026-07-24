@@ -45,6 +45,9 @@
 #'   \item \code{short_run}: short-run coefficient summaries.
 #'   \item \code{ec_coef}: error-correction coefficient (phi).
 #'   \item \code{vcov}: variance-covariance matrix of long-run coefficients.
+#'   \item \code{residuals}: stacked residuals from the model.
+#'   \item \code{fitted}: fitted values.
+#'   \item \code{group_ids}: vector of group identifiers.
 #'   \item \code{sigma}: residual standard error.
 #'   \item \code{estimator}: the estimator used.
 #' }
@@ -343,6 +346,10 @@ panel_ardl <- function(formula, data, id, time, p = 1, q = 1,
   fitted_all    <- do.call(c, fit_list)
   nobs          <- length(residuals_all)
 
+  group_ids_all <- do.call(c, lapply(seq_along(res_list), function(i) {
+    rep(groups[i], length(res_list[[i]]))
+  }))
+
   list(
     long_run      = theta_pmg,
     long_run_se   = theta_se,
@@ -358,6 +365,7 @@ panel_ardl <- function(formula, data, id, time, p = 1, q = 1,
     sigma2_group  = sig2_vec,
     residuals     = residuals_all,
     fitted        = fitted_all,
+    group_ids     = group_ids_all,
     nobs          = nobs,
     sigma         = sqrt(mean(residuals_all^2)),
     loglik        = loglik,
@@ -430,15 +438,17 @@ panel_ardl <- function(formula, data, id, time, p = 1, q = 1,
   sr_avg   <- mge$mean[sr_idx]
   sr_se    <- mge$se  [sr_idx]
 
-  # Residuals / fitted from full group regressions
+  # Residuals / fitted / group_ids
   res_list <- lapply(seq_along(gdata_list)[valid], function(ii) {
     gd     <- gdata_list[[ii]]
     X_full <- cbind(gd$y_lag1, gd$X_levels, gd$X_diff, 1)
     fit    <- lm.fit(X_full, gd$dy)
-    list(res = fit$residuals, fit = fit$fitted.values)
+    list(res = fit$residuals, fit = fit$fitted.values,
+         group = rep(groups[ii], length(fit$residuals)))
   })
   residuals_all <- do.call(c, lapply(res_list, `[[`, "res"))
   fitted_all    <- do.call(c, lapply(res_list, `[[`, "fit"))
+  group_ids_all <- do.call(c, lapply(res_list, `[[`, "group"))
   nobs          <- length(residuals_all)
 
   sig2   <- mean(residuals_all^2)
@@ -459,6 +469,7 @@ panel_ardl <- function(formula, data, id, time, p = 1, q = 1,
     group_theta   = do.call(rbind, lapply(group_results, `[[`, "theta")),
     residuals     = residuals_all,
     fitted        = fitted_all,
+    group_ids     = group_ids_all,
     nobs          = nobs,
     sigma         = sqrt(sig2),
     loglik        = loglik
@@ -579,6 +590,7 @@ panel_ardl <- function(formula, data, id, time, p = 1, q = 1,
     ec_se         = ec_se_val,
     residuals     = fit$residuals,
     fitted        = fit$fitted.values,
+    group_ids     = grp_vec,
     nobs          = n,
     sigma         = sqrt(s2_mle),
     loglik        = loglik

@@ -1,19 +1,23 @@
 #' @title ARDL Model Diagnostics
-#' @description Comprehensive diagnostic tests for ARDL models
+#' @description Comprehensive diagnostic tests for ARDL models, including time series
+#' and panel data models.
 #'
 #' @details
 #' This function performs a battery of diagnostic tests commonly used to
-#' assess the validity of ARDL models:
+#' assess the validity of ARDL models. It has been enhanced to support
+#' panel data structures and Multiple-Threshold NARDL models.
 #'
 #' \itemize{
-#'   \item \strong{Serial Correlation}: Breusch-Godfrey LM test
-#'   \item \strong{Heteroskedasticity}: Breusch-Pagan and ARCH tests
-#'   \item \strong{Normality}: Jarque-Bera test on residuals
-#'   \item \strong{Functional Form}: RESET test
-#'   \item \strong{Stability}: CUSUM and CUSUMSQ tests
+#'   \item \strong{Serial Correlation}: Breusch-Godfrey LM test. For panel models,
+#'         the test is performed on stacked residuals with group-aware lagging.
+#'   \item \strong{Heteroskedasticity}: Breusch-Pagan and ARCH tests.
+#'   \item \strong{Normality}: Jarque-Bera test on residuals.
+#'   \item \strong{Functional Form}: Ramsey RESET test.
+#'   \item \strong{Stability}: CUSUM and CUSUMSQ tests. The bounds follow
+#'         Brown, Durbin, and Evans (1975) methodology.
 #' }
 #'
-#' @param model An estimated model object (panel_ardl, boot_ardl, qnardl, or fourier_ardl)
+#' @param model An estimated model object (panel_ardl, boot_ardl, qnardl, mtnardl, or fourier_ardl)
 #' @param lags Integer. Number of lags for serial correlation tests (default: 4)
 #' @param arch_lags Integer. Number of lags for ARCH test (default: 4)
 #'
@@ -31,90 +35,101 @@
 #' }
 #'
 #' @export
-#' @importFrom stats residuals fitted lm pchisq pf shapiro.test Box.test
+#' @importFrom stats residuals fitted lm pchisq pf shapiro.test Box.test sd model.matrix ave
 #' @importFrom lmtest bgtest bptest resettest
 ardl_diagnostics <- function(model, lags = 4, arch_lags = 4) {
-  
+
   # Extract residuals and model
+  X <- NULL
+  group <- NULL
   if (inherits(model, "panel_ardl")) {
     resid <- model$residuals
     fitted_vals <- model$fitted
     lm_model <- NULL
+    group <- model$group_ids
   } else if (inherits(model, "boot_ardl")) {
     resid <- residuals(model$model)
     fitted_vals <- fitted(model$model)
     lm_model <- model$model
+    X <- tryCatch(model.matrix(lm_model), error = function(e) NULL)
   } else if (inherits(model, "fourier_ardl")) {
     resid <- model$residuals
     fitted_vals <- model$fitted
     lm_model <- model$model
+    X <- tryCatch(model.matrix(lm_model), error = function(e) NULL)
+  } else if (inherits(model, "mtnardl")) {
+    resid <- residuals(model$model)
+    fitted_vals <- fitted(model$model)
+    lm_model <- model$model
+    X <- tryCatch(model.matrix(lm_model), error = function(e) NULL)
   } else if (inherits(model, "qnardl")) {
     # Use median quantile results
     tau_50 <- which.min(abs(model$tau - 0.5))
     resid <- model$results_by_tau[[tau_50]]$residuals
     fitted_vals <- model$results_by_tau[[tau_50]]$fitted
     lm_model <- model$results_by_tau[[tau_50]]$model
+    X <- tryCatch(model.matrix(lm_model), error = function(e) NULL)
   } else {
-    stop("Model must be of class panel_ardl, boot_ardl, qnardl, or fourier_ardl")
+    stop("Model must be of class panel_ardl, boot_ardl, qnardl, mtnardl, or fourier_ardl")
   }
-  
+
   n <- length(resid)
   results <- list()
-  
+
   # 1. Serial Correlation Test (Breusch-Godfrey)
   if (!is.null(lm_model)) {
     results$serial_corr <- tryCatch({
       lmtest::bgtest(lm_model, order = lags)
     }, error = function(e) {
-      .manual_bg_test(resid, lags)
+      .manual_bg_test(resid, lags, X = X, group = group)
     })
   } else {
-    results$serial_corr <- .manual_bg_test(resid, lags)
+    results$serial_corr <- .manual_bg_test(resid, lags, X = X, group = group)
   }
-  
+
   # 2. Ljung-Box Test
   results$ljung_box <- Box.test(resid, lag = lags, type = "Ljung-Box")
-  
+
   # 3. Heteroskedasticity Test (Breusch-Pagan)
   if (!is.null(lm_model)) {
     results$hetero_bp <- tryCatch({
       lmtest::bptest(lm_model)
     }, error = function(e) {
-      .manual_bp_test(resid, fitted_vals)
+      .manual_bp_test(resid, fitted_vals, X = X)
     })
   } else {
-    results$hetero_bp <- .manual_bp_test(resid, fitted_vals)
+    results$hetero_bp <- .manual_bp_test(resid, fitted_vals, X = X)
   }
-  
+
   # 4. ARCH Test
   results$arch <- .arch_test(resid, arch_lags)
-  
+
   # 5. Normality Test (Jarque-Bera)
   results$normality <- .jarque_bera_test(resid)
-  
+
   # 6. Shapiro-Wilk Test (for smaller samples)
   if (n <= 5000) {
     results$shapiro <- shapiro.test(resid)
   }
-  
+
   # 7. RESET Test (Functional Form)
   if (!is.null(lm_model)) {
     results$reset <- tryCatch({
       lmtest::resettest(lm_model, power = 2:3)
     }, error = function(e) NULL)
   }
-  
+
   # 8. CUSUM Statistics
   results$cusum <- .cusum_test(resid)
-  
+
   # 9. CUSUM of Squares
   results$cusumsq <- .cusumsq_test(resid)
-  
+
   # Store residuals for plotting
   results$residuals <- resid
   results$fitted <- fitted_vals
   results$nobs <- n
-  
+
   class(results) <- c("ardl_diagnostics", "list")
   return(results)
 }
@@ -122,26 +137,48 @@ ardl_diagnostics <- function(model, lags = 4, arch_lags = 4) {
 
 #' @title Manual Breusch-Godfrey Test
 #' @keywords internal
-.manual_bg_test <- function(resid, lags) {
-  
+.manual_bg_test <- function(resid, lags, X = NULL, group = NULL) {
+
   n <- length(resid)
-  
-  # Create lagged residuals
-  resid_lags <- sapply(1:lags, function(l) {
-    c(rep(NA, l), resid[1:(n-l)])
-  })
-  
-  # Auxiliary regression
-  df <- data.frame(resid = resid, resid_lags)
+
+  # Create lagged residuals (handling panel structure if provided)
+  if (!is.null(group)) {
+    resid_lags <- matrix(NA, n, lags)
+    for (l in 1:lags) {
+      resid_lags[, l] <- ave(resid, group, FUN = function(x) {
+        c(rep(NA, l), x[1:(length(x) - l)])
+      })
+    }
+  } else {
+    resid_lags <- sapply(1:lags, function(l) {
+      c(rep(NA, l), resid[1:(n - l)])
+    })
+  }
+  colnames(resid_lags) <- paste0("resid_L", 1:lags)
+
+  # Auxiliary regression data
+  if (!is.null(X)) {
+    # Ensure X has same length as resid
+    if (nrow(X) != n) {
+      # Try to align or just proceed with resid_lags
+      df <- data.frame(resid = resid, resid_lags)
+    } else {
+      df <- data.frame(resid = resid, resid_lags, X)
+    }
+  } else {
+    df <- data.frame(resid = resid, resid_lags)
+  }
+
   df <- na.omit(df)
-  
+  n_used <- nrow(df)
+
   aux_model <- lm(resid ~ ., data = df)
   r_sq <- summary(aux_model)$r.squared
-  
-  # LM statistic
-  LM <- (n - lags) * r_sq
+
+  # LM statistic = n_used * R^2
+  LM <- n_used * r_sq
   p_value <- 1 - pchisq(LM, df = lags)
-  
+
   list(
     statistic = LM,
     parameter = lags,
@@ -153,25 +190,29 @@ ardl_diagnostics <- function(model, lags = 4, arch_lags = 4) {
 
 #' @title Manual Breusch-Pagan Test
 #' @keywords internal
-.manual_bp_test <- function(resid, fitted) {
-  
+.manual_bp_test <- function(resid, fitted, X = NULL) {
+
   n <- length(resid)
   resid_sq <- resid^2
-  
-  # Regression of squared residuals on fitted values
-  aux_model <- lm(resid_sq ~ fitted)
-  
-  # Test statistic
-  RSS <- sum((resid_sq - fitted(aux_model))^2)
-  TSS <- sum((resid_sq - mean(resid_sq))^2)
-  r_sq <- 1 - RSS/TSS
-  
+
+  # Regression of squared residuals on regressors or fitted values
+  if (!is.null(X) && nrow(X) == n) {
+    df <- data.frame(resid_sq = resid_sq, X)
+    aux_model <- lm(resid_sq ~ ., data = df)
+    df_test <- ncol(X)
+  } else {
+    aux_model <- lm(resid_sq ~ fitted)
+    df_test <- 1
+  }
+
+  # Test statistic (Koenker's studentized version)
+  r_sq <- summary(aux_model)$r.squared
   LM <- n * r_sq
-  p_value <- 1 - pchisq(LM, df = 1)
-  
+  p_value <- 1 - pchisq(LM, df = df_test)
+
   list(
     statistic = LM,
-    parameter = 1,
+    parameter = df_test,
     p.value = p_value,
     method = "Breusch-Pagan Test"
   )
@@ -181,25 +222,25 @@ ardl_diagnostics <- function(model, lags = 4, arch_lags = 4) {
 #' @title ARCH Test
 #' @keywords internal
 .arch_test <- function(resid, lags) {
-  
+
   n <- length(resid)
   resid_sq <- resid^2
-  
+
   # Create lagged squared residuals
   resid_sq_lags <- sapply(1:lags, function(l) {
     c(rep(NA, l), resid_sq[1:(n-l)])
   })
-  
+
   df <- data.frame(resid_sq = resid_sq, resid_sq_lags)
   df <- na.omit(df)
-  
+
   aux_model <- lm(resid_sq ~ ., data = df)
   r_sq <- summary(aux_model)$r.squared
-  
+
   # LM statistic
   LM <- (n - lags) * r_sq
   p_value <- 1 - pchisq(LM, df = lags)
-  
+
   list(
     statistic = LM,
     parameter = lags,
@@ -212,22 +253,22 @@ ardl_diagnostics <- function(model, lags = 4, arch_lags = 4) {
 #' @title Jarque-Bera Test
 #' @keywords internal
 .jarque_bera_test <- function(resid) {
-  
+
   n <- length(resid)
   m <- mean(resid)
   s <- sd(resid)
-  
+
   # Standardized residuals
   z <- (resid - m) / s
-  
+
   # Skewness and Kurtosis
   skewness <- mean(z^3)
   kurtosis <- mean(z^4)
-  
+
   # Jarque-Bera statistic
   JB <- n * (skewness^2 / 6 + (kurtosis - 3)^2 / 24)
   p_value <- 1 - pchisq(JB, df = 2)
-  
+
   list(
     statistic = JB,
     parameter = 2,
@@ -242,20 +283,23 @@ ardl_diagnostics <- function(model, lags = 4, arch_lags = 4) {
 #' @title CUSUM Test
 #' @keywords internal
 .cusum_test <- function(resid) {
-  
+
   n <- length(resid)
   sigma <- sd(resid)
-  
+
   # Cumulative sum of standardized residuals
   cusum <- cumsum(resid) / sigma
-  
-  # Critical bounds (5% level)
-  # Approximate: +/- 0.948 * sqrt(n)
-  bound <- 0.948 * sqrt(n) * (1:n) / n
-  
+
+  # Critical bounds (5% level) according to Brown, Durbin, and Evans (1975)
+  # W_r crosses bounds +/- a * [sqrt(n) + 2*t/sqrt(n)]
+  # where a = 0.948 for 5% significance
+  a <- 0.948
+  t <- 1:n
+  bound <- a * (sqrt(n) + 2 * t / sqrt(n))
+
   # Check if CUSUM crosses bounds
   crosses <- any(abs(cusum) > bound)
-  
+
   list(
     cusum = cusum,
     upper_bound = bound,
@@ -269,18 +313,20 @@ ardl_diagnostics <- function(model, lags = 4, arch_lags = 4) {
 #' @title CUSUM of Squares Test
 #' @keywords internal
 .cusumsq_test <- function(resid) {
-  
+
   n <- length(resid)
   resid_sq <- resid^2
-  
+
   # Cumulative sum of squares
   cusumsq <- cumsum(resid_sq) / sum(resid_sq)
-  
+
   # Expected value under null: t/n
   expected <- (1:n) / n
-  
+
   # Critical bounds (5% level, approximate)
-  # Based on Brownian bridge
+  # Based on Kolmogorov-Smirnov statistic for Brownian bridge
+  # a = 1.358 for 5% level
+  # The bounds are expected +/- a / sqrt(n/2) roughly
   bound <- 1.358 / sqrt(n)
   
   upper <- expected + bound

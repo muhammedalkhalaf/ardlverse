@@ -214,28 +214,28 @@ qnardl <- function(formula, data, tau = c(0.25, 0.5, 0.75),
       # Lagged differences
       if (q[j] > 0) {
         for (lag in 1:q[j]) {
-          result_df[[paste0("d_", v, "_pos_L", lag)]] <- c(rep(NA, lag), dx_pos[1:(length(dx_pos) - lag - 1)])
-          result_df[[paste0("d_", v, "_neg_L", lag)]] <- c(rep(NA, lag), dx_neg[1:(length(dx_neg) - lag - 1)])
+          result_df[[paste0("d_", v, "_pos_L", lag)]] <- c(rep(NA, lag - 1), dx_pos[1:(length(dx_pos) - lag)])
+          result_df[[paste0("d_", v, "_neg_L", lag)]] <- c(rep(NA, lag - 1), dx_neg[1:(length(dx_neg) - lag)])
         }
       }
-      
+
     } else {
       # No decomposition - standard ARDL
       result_df[[v]] <- x[-c(1, length(x))]
       result_df[[paste0("d_", v)]] <- dx[-1]
-      
+
       if (q[j] > 0) {
         for (lag in 1:q[j]) {
-          result_df[[paste0("d_", v, "_L", lag)]] <- c(rep(NA, lag), dx[1:(length(dx) - lag - 1)])
+          result_df[[paste0("d_", v, "_L", lag)]] <- c(rep(NA, lag - 1), dx[1:(length(dx) - lag)])
         }
       }
     }
   }
-  
+
   # Lagged dy
   if (p > 1) {
     for (lag in 1:(p-1)) {
-      result_df[[paste0("dy_L", lag)]] <- c(rep(NA, lag), dy[1:(length(dy) - lag - 1)])
+      result_df[[paste0("dy_L", lag)]] <- c(rep(NA, lag - 1), dy[1:(length(dy) - lag)])
     }
   }
   

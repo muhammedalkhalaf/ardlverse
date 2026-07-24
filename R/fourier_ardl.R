@@ -271,18 +271,18 @@ fourier_ardl <- function(formula, data, p = 1, q = 1, k = 1, case = 3,
     result[[paste0("d_", v)]] <- dx
     
     # Lagged differences
-    if (q[j] > 0) {
-      for (lag in 1:q[j]) {
-        lagged <- c(rep(NA, lag), dx[1:(length(dx) - lag)])
+    if (q[j] > 1) {
+      for (lag in 1:(q[j] - 1)) {
+        lagged <- c(rep(NA, lag - 1), dx[1:(length(dx) - lag)])
         result[[paste0("d_", v, "_L", lag)]] <- lagged
       }
     }
   }
-  
+
   # Lagged dy
   if (p > 1) {
     for (lag in 1:(p-1)) {
-      result[[paste0("dy_L", lag)]] <- c(rep(NA, lag), dy[1:(length(dy) - lag)])
+      result[[paste0("dy_L", lag)]] <- c(rep(NA, lag - 1), dy[1:(length(dy) - lag)])
     }
   }
   

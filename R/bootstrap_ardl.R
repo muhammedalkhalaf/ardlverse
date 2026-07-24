@@ -176,25 +176,25 @@ boot_ardl <- function(formula, data, p = 1, q = 1, case = 3,
   dy_lags <- NULL
   if (p > 1) {
     dy_lags <- sapply(1:(p-1), function(lag) {
-      c(rep(NA, lag), dy[1:(length(dy) - lag)])
+      c(rep(NA, lag - 1), dy[1:(length(dy) - lag)])
     })
     colnames(dy_lags) <- paste0("dy_L", 1:(p-1))
   }
-  
+
   # X variables: levels and differences
   X_levels <- as.matrix(data[-nrow(data), x_vars, drop = FALSE])
-  
+
   X_diff <- sapply(x_vars, function(v) diff(data[[v]]))
   if (is.vector(X_diff)) X_diff <- matrix(X_diff, ncol = 1)
   colnames(X_diff) <- paste0("d", x_vars)
-  
+
   # Lagged X differences
   X_diff_lags <- NULL
   for (j in seq_along(x_vars)) {
-    if (q[j] > 0) {
-      for (lag in 1:q[j]) {
+    if (q[j] > 1) {
+      for (lag in 1:(q[j] - 1)) {
         dx <- diff(data[[x_vars[j]]])
-        lagged <- c(rep(NA, lag), dx[1:(length(dx) - lag)])
+        lagged <- c(rep(NA, lag - 1), dx[1:(length(dx) - lag)])
         X_diff_lags <- cbind(X_diff_lags, lagged)
         colnames(X_diff_lags)[ncol(X_diff_lags)] <- paste0("d", x_vars[j], "_L", lag)
       }

@@ -124,11 +124,14 @@ mtnardl <- function(formula, data, thresholds = c(0), p = 1, q = 1, case = 3,
   y_lag <- y[valid_idx - 1]
   
   # Lagged differences of dependent variable
-  dy_lags <- matrix(NA, n_valid, p)
-  for (i in 1:p) {
-    dy_lags[, i] <- diff(y)[(max_lag - i + 1):(n - i)]
+  dy_lags <- NULL
+  if (p > 1) {
+    dy_lags <- matrix(NA, n_valid, p - 1)
+    for (i in 1:(p - 1)) {
+      dy_lags[, i] <- diff(y)[(max_lag - i):(n - 1 - i)]
+    }
+    colnames(dy_lags) <- paste0("d.", y_var, ".l", 1:(p - 1))
   }
-  colnames(dy_lags) <- paste0("d.", y_var, ".l", 1:p)
   
   # Decomposed variables: levels and differences
   x_levels <- matrix(NA, n_valid, k_total)

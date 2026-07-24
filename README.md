@@ -14,7 +14,7 @@
 - 🎰 **Bootstrap ARDL**: Bootstrap-based bounds testing for small samples
 - 📈 **Quantile NARDL**: Quantile Nonlinear ARDL combining distributional and asymmetric effects
 - 🌊 **Fourier ARDL**: Smooth structural breaks using Fourier approximation
-- 🔍 **Diagnostics**: Comprehensive model diagnostics and visualization
+- 🔍 **Diagnostics**: Comprehensive model diagnostics and visualization, with full support for Panel and MT-NARDL models. Verified stability tests (CUSUM) and group-aware serial correlation tests.
 
 ## Installation
 

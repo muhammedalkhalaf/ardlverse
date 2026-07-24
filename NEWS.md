@@ -1,3 +1,25 @@
+# ardlverse 2.1.0
+
+## Model Specification & Methodological Improvements
+
+Critical audit of the entire package led to significant fixes in model design and lag management:
+
+1.  **Corrected Lag Alignment**: Fixed a major specification error where contemporaneous differences of the dependent variable ($\Delta y_t$) were accidentally included as regressors in multiple models (`aardl`, `mtnardl`, `rolling_ardl`). This previously caused spurious $R^2 = 1$ in some cases.
+2.  **Unified Lag Definitions**: Synchronized the interpretation of $p$ (dependent lags) and $q$ (independent lags) across all model types (Linear, Nonlinear, Panel, Fourier, and Quantile).
+3.  **Bootstrap ARDL Robustness**: Improved the internal data preparation for bootstrap procedures, ensuring that the restricted and unrestricted models are perfectly aligned in terms of sample size and lag structure.
+
+## Enhanced Diagnostics
+
+1.  **Corrected CUSUM/CUSUMSQ Bounds**: Re-implemented the critical bounds for stability tests following Brown, Durbin, and Evans (1975). The bounds are now correctly non-linear and fan out as expected.
+2.  **Panel-Aware Serial Correlation**: The Breusch-Godfrey LM test (`ardl_diagnostics`) now supports panel data. It correctly computes lagged residuals within groups (avoiding "cross-contamination" at unit boundaries).
+3.  **Improved Heteroskedasticity Tests**: "Manual" implementations of Breusch-Pagan and ARCH tests now correctly include all model regressors, which is essential for valid inference in dynamic ARDL models.
+4.  **MT-NARDL Support**: `ardl_diagnostics` now fully supports Multiple-Threshold NARDL models.
+
+## Panel Data Updates
+
+1.  **Metadata Export**: All panel estimators (`pmg`, `mg`, `dfe`) for both linear and nonlinear specifications now export residuals, fitted values, and group identifiers. This enables the use of the standard diagnostic suite on panel models.
+2.  **Harmonized Output**: Panel model objects now have a more consistent structure, facilitating easier post-estimation analysis.
+
 # ardlverse 2.0.0
 
 ## Major bug fixes in panel_ardl()

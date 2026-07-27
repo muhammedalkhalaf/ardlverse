@@ -105,8 +105,8 @@ qnardl <- function(formula, data, tau = c(0.25, 0.5, 0.75),
   }
   
   # Get variable names
-  y_col <- "dy"
-  x_cols <- setdiff(names(qnardl_data$model_data), "dy")
+  y_col <- paste0("d.", y_var)
+  x_cols <- setdiff(names(qnardl_data$model_data), y_col)
   
   # Estimate quantile regressions for each tau
   results_by_tau <- lapply(tau, function(t) {
@@ -124,7 +124,7 @@ qnardl <- function(formula, data, tau = c(0.25, 0.5, 0.75),
   
   # EC coefficients
   ec_coefs <- sapply(results_by_tau, function(r) {
-    idx <- grep("y_lag1", names(r$coefficients))
+    idx <- grep(paste0("^", y_var, "\\.l1$"), names(r$coefficients))
     if (length(idx) > 0) r$coefficients[idx] else NA
   })
   
@@ -177,9 +177,11 @@ qnardl <- function(formula, data, tau = c(0.25, 0.5, 0.75),
   
   # Initialize result data frame
   result_df <- data.frame(
-    dy = dy[-1],
-    y_lag1 = y_lag1[-1]
+    dy = dy,
+    y_lag1 = y_lag1
   )
+  colnames(result_df)[1] <- paste0("d.", y_var)
+  colnames(result_df)[2] <- paste0(y_var, ".l1")
   
   # Track positive and negative variable names
   pos_vars <- c()
@@ -201,32 +203,32 @@ qnardl <- function(formula, data, tau = c(0.25, 0.5, 0.75),
       x_neg <- cumsum(dx_neg)
       
       # Levels (lagged)
-      result_df[[paste0(v, "_pos")]] <- x_pos[-1]
-      result_df[[paste0(v, "_neg")]] <- x_neg[-1]
+      result_df[[paste0(v, "_pos.l1")]] <- x_pos
+      result_df[[paste0(v, "_neg.l1")]] <- x_neg
       
-      pos_vars <- c(pos_vars, paste0(v, "_pos"))
-      neg_vars <- c(neg_vars, paste0(v, "_neg"))
+      pos_vars <- c(pos_vars, paste0(v, "_pos.l1"))
+      neg_vars <- c(neg_vars, paste0(v, "_neg.l1"))
       
       # Differences
-      result_df[[paste0("d_", v, "_pos")]] <- dx_pos[-1]
-      result_df[[paste0("d_", v, "_neg")]] <- dx_neg[-1]
+      result_df[[paste0("d.", v, "_pos")]] <- dx_pos
+      result_df[[paste0("d.", v, "_neg")]] <- dx_neg
       
       # Lagged differences
       if (q[j] > 0) {
         for (lag in 1:q[j]) {
-          result_df[[paste0("d_", v, "_pos_L", lag)]] <- c(rep(NA, lag - 1), dx_pos[1:(length(dx_pos) - lag)])
-          result_df[[paste0("d_", v, "_neg_L", lag)]] <- c(rep(NA, lag - 1), dx_neg[1:(length(dx_neg) - lag)])
+          result_df[[paste0("d.", v, "_pos.l", lag)]] <- c(rep(NA, lag), dx_pos[1:(length(dx_pos) - lag)])
+          result_df[[paste0("d.", v, "_neg.l", lag)]] <- c(rep(NA, lag), dx_neg[1:(length(dx_neg) - lag)])
         }
       }
 
     } else {
       # No decomposition - standard ARDL
-      result_df[[v]] <- x[-c(1, length(x))]
-      result_df[[paste0("d_", v)]] <- dx[-1]
+      result_df[[paste0(v, ".l1")]] <- x[-length(x)]
+      result_df[[paste0("d.", v)]] <- dx
 
       if (q[j] > 0) {
         for (lag in 1:q[j]) {
-          result_df[[paste0("d_", v, "_L", lag)]] <- c(rep(NA, lag - 1), dx[1:(length(dx) - lag)])
+          result_df[[paste0("d.", v, ".l", lag)]] <- c(rep(NA, lag), dx[1:(length(dx) - lag)])
         }
       }
     }
@@ -235,7 +237,7 @@ qnardl <- function(formula, data, tau = c(0.25, 0.5, 0.75),
   # Lagged dy
   if (p > 1) {
     for (lag in 1:(p-1)) {
-      result_df[[paste0("dy_L", lag)]] <- c(rep(NA, lag - 1), dy[1:(length(dy) - lag)])
+      result_df[[paste0("d.", y_var, ".l", lag)]] <- c(rep(NA, lag), dy[1:(length(dy) - lag)])
     }
   }
   
@@ -244,7 +246,8 @@ qnardl <- function(formula, data, tau = c(0.25, 0.5, 0.75),
     result_df$trend <- 1:nrow(result_df)
   }
   
-  # Remove NAs
+  # Remove first row and NAs
+  result_df <- result_df[-1, ]
   result_df <- na.omit(result_df)
   
   list(
@@ -260,7 +263,7 @@ qnardl <- function(formula, data, tau = c(0.25, 0.5, 0.75),
 .estimate_qnardl_tau <- function(model_data, y_col, x_cols, tau) {
   
   # Build formula
-  formula_str <- paste(y_col, "~", paste(x_cols, collapse = " + "))
+  formula_str <- paste(paste0("`", y_col, "`"), "~", paste(x_cols, collapse = " + "))
   
   # Estimate quantile regression
   fit <- quantreg::rq(
@@ -302,7 +305,10 @@ qnardl <- function(formula, data, tau = c(0.25, 0.5, 0.75),
   
   for (i in seq_along(results_by_tau)) {
     res <- results_by_tau[[i]]
-    phi <- res$coefficients["y_lag1"]
+    # EC coefficient is the one ending in .l1 but not in level_vars
+    ec_name <- grep("\\.l1$", names(res$coefficients), value = TRUE)
+    ec_name <- setdiff(ec_name, level_vars)[1]
+    phi <- res$coefficients[ec_name]
     
     for (j in seq_along(level_vars)) {
       v <- level_vars[j]
@@ -322,8 +328,8 @@ qnardl <- function(formula, data, tau = c(0.25, 0.5, 0.75),
 #' @keywords internal
 .test_asymmetry <- function(results_by_tau, var, tau) {
   
-  pos_var <- paste0(var, "_pos")
-  neg_var <- paste0(var, "_neg")
+  pos_var <- paste0(var, "_pos.l1")
+  neg_var <- paste0(var, "_neg.l1")
   
   test_results <- data.frame(
     tau = tau,
@@ -336,7 +342,9 @@ qnardl <- function(formula, data, tau = c(0.25, 0.5, 0.75),
   
   for (i in seq_along(results_by_tau)) {
     res <- results_by_tau[[i]]
-    phi <- res$coefficients["y_lag1"]
+    ec_name <- grep("\\.l1$", names(res$coefficients), value = TRUE)
+    ec_name <- setdiff(ec_name, c(pos_var, neg_var))[1]
+    phi <- res$coefficients[ec_name]
     
     if (pos_var %in% names(res$coefficients) && neg_var %in% names(res$coefficients)) {
       beta_pos <- res$coefficients[pos_var]
@@ -352,7 +360,7 @@ qnardl <- function(formula, data, tau = c(0.25, 0.5, 0.75),
       # Simplified Wald test (delta method approximation)
       se_pos <- res$se[pos_var]
       se_neg <- res$se[neg_var]
-      se_phi <- res$se["y_lag1"]
+      se_phi <- res$se[ec_name]
       
       # Variance of difference (simplified)
       var_theta_pos <- (se_pos / phi)^2 + (beta_pos * se_phi / phi^2)^2
@@ -519,8 +527,8 @@ plot.qnardl <- function(x, var = NULL, type = "long_run", ...) {
     var <- x$decompose[1]
   }
   
-  pos_var <- paste0(var, "_pos")
-  neg_var <- paste0(var, "_neg")
+  pos_var <- paste0(var, "_pos.l1")
+  neg_var <- paste0(var, "_neg.l1")
   
   # Extract coefficients
   theta_pos <- x$long_run_pos[pos_var, ]
@@ -584,13 +592,15 @@ dynamic_multipliers <- function(object, var, tau = 0.5, horizon = 20) {
   coefs <- res$coefficients
   
   # Get phi (EC coefficient)
-  phi <- coefs["y_lag1"]
+  y_var <- object$y_var
+  ec_name <- paste0(y_var, ".l1")
+  phi <- coefs[ec_name]
   
   # Get short-run coefficients
-  pos_var <- paste0(var, "_pos")
-  neg_var <- paste0(var, "_neg")
-  d_pos_var <- paste0("d_", var, "_pos")
-  d_neg_var <- paste0("d_", var, "_neg")
+  pos_var <- paste0(var, "_pos.l1")
+  neg_var <- paste0(var, "_neg.l1")
+  d_pos_var <- paste0("d.", var, "_pos")
+  d_neg_var <- paste0("d.", var, "_neg")
   
   # Initial impacts
   delta_pos_0 <- ifelse(d_pos_var %in% names(coefs), coefs[d_pos_var], 0)

@@ -158,13 +158,14 @@ panel_ardl <- function(formula, data, id, time, p = 1, q = 1,
 
   # ECT "X" component: X at CURRENT period t -> rows 2:n
   X_levels <- as.matrix(data[2:n, x_vars, drop = FALSE])
+  colnames(X_levels) <- paste0(x_vars, ".l1")
 
   # Time vector aligned with dy (current period = t_vals[2:n])
   time_vec <- t_vals[2:n]
 
   # SR contemporaneous diffs  Dx_t
   X_diff <- do.call(cbind, lapply(x_vars, function(v) diff(data[[v]])))
-  colnames(X_diff) <- paste0("D.", x_vars)
+  colnames(X_diff) <- paste0("d.", x_vars)
 
   # SR lagged diffs of x: lags 1 ... q[j]-1
   for (j in seq_along(x_vars)) {
@@ -173,7 +174,7 @@ panel_ardl <- function(formula, data, id, time, p = 1, q = 1,
       for (lag in seq_len(q[j] - 1)) {
         col <- c(rep(NA_real_, lag), xd[seq_len(length(xd) - lag)])
         X_diff <- cbind(X_diff, col)
-        colnames(X_diff)[ncol(X_diff)] <- paste0("D.", x_vars[j], ".L", lag)
+        colnames(X_diff)[ncol(X_diff)] <- paste0("d.", x_vars[j], ".l", lag)
       }
     }
   }
@@ -183,7 +184,7 @@ panel_ardl <- function(formula, data, id, time, p = 1, q = 1,
     for (lag in seq_len(p - 1)) {
       col <- c(rep(NA_real_, lag), dy[seq_len(length(dy) - lag)])
       X_diff <- cbind(X_diff, col)
-      colnames(X_diff)[ncol(X_diff)] <- paste0("D.", y_var, ".L", lag)
+      colnames(X_diff)[ncol(X_diff)] <- paste0("d.", y_var, ".l", lag)
     }
   }
 
@@ -191,6 +192,8 @@ panel_ardl <- function(formula, data, id, time, p = 1, q = 1,
   df <- data.frame(dy = dy, y_lag1 = y_lag1, .time = time_vec,
                    X_levels, X_diff,
                    check.names = FALSE)
+  colnames(df)[1] <- paste0("d.", y_var)
+  colnames(df)[2] <- paste0(y_var, ".l1")
   df <- na.omit(df)
 
   # Apply start_time filter AFTER lag computation (mirrors Stata's "if year>=X")
@@ -201,12 +204,15 @@ panel_ardl <- function(formula, data, id, time, p = 1, q = 1,
 
   if (nrow(df) < ncol(X_diff) + length(x_vars) + 3) return(NULL)
 
-  xd_cols <- setdiff(names(df), c("dy", "y_lag1", x_vars))
+  dy_name <- paste0("d.", y_var)
+  yl_name <- paste0(y_var, ".l1")
+  xl_names <- paste0(x_vars, ".l1")
+  xd_cols <- setdiff(names(df), c(dy_name, yl_name, xl_names))
 
   list(
-    dy       = df[["dy"]],
-    y_lag1   = df[["y_lag1"]],
-    X_levels = as.matrix(df[, x_vars,   drop = FALSE]),
+    dy       = df[[dy_name]],
+    y_lag1   = df[[yl_name]],
+    X_levels = as.matrix(df[, xl_names, drop = FALSE]),
     X_diff   = as.matrix(df[, xd_cols,  drop = FALSE]),
     n        = nrow(df)
   )

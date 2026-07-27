@@ -176,17 +176,19 @@ boot_ardl <- function(formula, data, p = 1, q = 1, case = 3,
   dy_lags <- NULL
   if (p > 1) {
     dy_lags <- sapply(1:(p-1), function(lag) {
-      c(rep(NA, lag - 1), dy[1:(length(dy) - lag)])
+      c(rep(NA, lag), dy[1:(length(dy) - lag)])
     })
-    colnames(dy_lags) <- paste0("dy_L", 1:(p-1))
+    if (is.vector(dy_lags)) dy_lags <- matrix(dy_lags, ncol = 1)
+    colnames(dy_lags) <- paste0("d.", y_var, ".l", 1:(p-1))
   }
 
   # X variables: levels and differences
   X_levels <- as.matrix(data[-nrow(data), x_vars, drop = FALSE])
+  colnames(X_levels) <- paste0(x_vars, ".l1")
 
   X_diff <- sapply(x_vars, function(v) diff(data[[v]]))
   if (is.vector(X_diff)) X_diff <- matrix(X_diff, ncol = 1)
-  colnames(X_diff) <- paste0("d", x_vars)
+  colnames(X_diff) <- paste0("d.", x_vars)
 
   # Lagged X differences
   X_diff_lags <- NULL
@@ -194,9 +196,9 @@ boot_ardl <- function(formula, data, p = 1, q = 1, case = 3,
     if (q[j] > 1) {
       for (lag in 1:(q[j] - 1)) {
         dx <- diff(data[[x_vars[j]]])
-        lagged <- c(rep(NA, lag - 1), dx[1:(length(dx) - lag)])
+        lagged <- c(rep(NA, lag), dx[1:(length(dx) - lag)])
         X_diff_lags <- cbind(X_diff_lags, lagged)
-        colnames(X_diff_lags)[ncol(X_diff_lags)] <- paste0("d", x_vars[j], "_L", lag)
+        colnames(X_diff_lags)[ncol(X_diff_lags)] <- paste0("d.", x_vars[j], ".l", lag)
       }
     }
   }
@@ -208,6 +210,8 @@ boot_ardl <- function(formula, data, p = 1, q = 1, case = 3,
     X_levels[-1, , drop = FALSE],
     X_diff[-1, , drop = FALSE]
   )
+  colnames(result)[1] <- paste0("d.", y_var)
+  colnames(result)[2] <- paste0(y_var, ".l1")
   
   if (!is.null(dy_lags)) {
     result <- cbind(result, dy_lags[-1, , drop = FALSE])
@@ -237,10 +241,11 @@ boot_ardl <- function(formula, data, p = 1, q = 1, case = 3,
 #' @keywords internal
 .estimate_ardl_unrestricted <- function(ardl_data, case) {
   
-  # All variables except dy
+  # All variables except dependent
+  dep_var <- names(ardl_data)[1]
   xvars <- names(ardl_data)[-1]
   
-  formula_str <- paste("dy ~", paste(xvars, collapse = " + "))
+  formula_str <- paste(paste0("`", dep_var, "`"), "~", paste(xvars, collapse = " + "))
   
   if (case == 1) {
     formula_str <- paste(formula_str, "- 1")
@@ -257,22 +262,21 @@ boot_ardl <- function(formula, data, p = 1, q = 1, case = 3,
 .estimate_ardl_restricted <- function(ardl_data, case) {
   
   # Remove level variables (y_lag1 and X in levels)
+  dep_var <- names(ardl_data)[1]
   xvars <- names(ardl_data)[-1]
   
-  # Identify level variables to exclude
-  level_vars <- grep("^y_lag1$|^[A-Za-z]", xvars, value = TRUE)
-  level_vars <- level_vars[!grepl("^d|^const$|^trend$|_L[0-9]", level_vars)]
-  level_vars <- c("y_lag1", level_vars)
+  # Identify level variables to exclude (ending in .l1)
+  level_vars <- grep("\\.l1$", xvars, value = TRUE)
   
   # Keep only differenced variables and deterministics
   keep_vars <- setdiff(xvars, level_vars)
   
   if (length(keep_vars) == 0) {
     # At minimum, keep differences
-    keep_vars <- grep("^d", xvars, value = TRUE)
+    keep_vars <- grep("^d\\.", xvars, value = TRUE)
   }
   
-  formula_str <- paste("dy ~", paste(keep_vars, collapse = " + "))
+  formula_str <- paste(paste0("`", dep_var, "`"), "~", paste(keep_vars, collapse = " + "))
   
   if (case == 1) {
     formula_str <- paste(formula_str, "- 1")
@@ -309,11 +313,18 @@ boot_ardl <- function(formula, data, p = 1, q = 1, case = 3,
   
   coefs <- summary(model_ur)$coefficients
   
-  # Find y_lag1 coefficient
-  y_lag1_idx <- which(rownames(coefs) == "y_lag1")
+  # Find lagged dependent variable coefficient (ends in .l1)
+  dep_var_name <- as.character(formula(model_ur))[2]
+  # Remove 'd.' from the beginning to get the original variable name
+  y_var <- sub("^d\\.", "", dep_var_name)
+  y_lag1_name <- paste0(y_var, ".l1")
+  
+  y_lag1_idx <- which(rownames(coefs) == y_lag1_name)
   
   if (length(y_lag1_idx) == 0) {
-    return(NA)
+    # Try alternative search if naming was different
+    y_lag1_idx <- grep("\\.l1$", rownames(coefs))[1]
+    if (is.na(y_lag1_idx)) return(NA)
   }
   
   t_stat <- coefs[y_lag1_idx, "t value"]
@@ -350,7 +361,8 @@ boot_ardl <- function(formula, data, p = 1, q = 1, case = 3,
     # Generate bootstrap dy under null (no cointegration)
     # Simple approach: use restricted model structure
     ardl_boot <- ardl_data
-    ardl_boot$dy <- fitted(model_ur) - resid_ur + boot_resid
+    dep_var <- names(ardl_boot)[1]
+    ardl_boot[[dep_var]] <- fitted(model_ur) - resid_ur + boot_resid
     
     # Re-estimate models
     tryCatch({

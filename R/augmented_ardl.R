@@ -157,31 +157,40 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
     
     dx_j <- diff(x_j)
     x_diff_j <- matrix(NA, n_valid, q[min(j, length(q))])
+    x_name <- if (use_nardl) x_vars_new[j] else x_vars[j]
     for (i in 0:(q[min(j, length(q))] - 1)) {
       x_diff_j[, i + 1] <- dx_j[(max_lag - i):(n - 1 - i)]
+    }
+    colnames(x_diff_j) <- if (q[min(j, length(q))] > 1) {
+      c(paste0("d.", x_name), paste0("d.", x_name, ".l", 1:(q[min(j, length(q))] - 1)))
+    } else {
+      paste0("d.", x_name)
     }
     x_diff_list[[j]] <- x_diff_j
   }
   
   if (use_nardl) {
-    colnames(x_levels) <- x_vars_new
+    colnames(x_levels) <- paste0(x_vars_new, ".l1")
   } else {
-    colnames(x_levels) <- x_vars
+    colnames(x_levels) <- paste0(x_vars, ".l1")
   }
   
   # Combine difference terms
   x_diffs <- do.call(cbind, x_diff_list)
   
   # Build design matrix
-  design <- cbind(y_lag, x_levels, dy_lags, x_diffs)
+  design <- data.frame(y_lag, x_levels, dy_lags, x_diffs)
+  colnames(design)[1] <- paste0(y_var, ".l1")
+  
+  # Ensure x_diffs have good names if not already set
+  # (x_levels already has names from line 167/169)
   
   # Add deterministic components
   if (case >= 2) {
-    design <- cbind(design, intercept = 1)
+    design$intercept <- 1
   }
   if (case >= 4) {
-    trend <- 1:n_valid
-    design <- cbind(design, trend = trend)
+    design$trend <- 1:n_valid
   }
   
   # Add Fourier terms
@@ -191,7 +200,11 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
   }
   
   # Estimate model
-  model <- stats::lm(dy ~ design - 1)
+  model_df <- data.frame(dy = dy, design)
+  colnames(model_df)[1] <- paste0("d.", y_var)
+  
+  formula_ardl <- as.formula(paste0("`d.", y_var, "` ~ . - 1"))
+  model <- stats::lm(formula_ardl, data = model_df)
   coefs <- stats::coef(model)
   vcov_mat <- stats::vcov(model)
   

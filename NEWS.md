@@ -4,9 +4,10 @@
 
 Critical audit of the entire package led to significant fixes in model design and lag management:
 
-1.  **Corrected Lag Alignment**: Fixed a major specification error where contemporaneous differences of the dependent variable ($\Delta y_t$) were accidentally included as regressors in multiple models (`aardl`, `mtnardl`, `rolling_ardl`). This previously caused spurious $R^2 = 1$ in some cases.
-2.  **Unified Lag Definitions**: Synchronized the interpretation of $p$ (dependent lags) and $q$ (independent lags) across all model types (Linear, Nonlinear, Panel, Fourier, and Quantile).
-3.  **Bootstrap ARDL Robustness**: Improved the internal data preparation for bootstrap procedures, ensuring that the restricted and unrestricted models are perfectly aligned in terms of sample size and lag structure.
+1.  **Improved Model Output Readability**: Internal variable naming has been overhauled across all estimators (`aardl`, `mtnardl`, `pnardl`, etc.). Design matrix prefixes like `design` have been removed in favor of explicit names (e.g., `d.yvar`, `yvar.l1`, `d.xvar.l{lag}`).
+2.  **Corrected Lag Alignment**: Fixed a major specification error where contemporaneous differences of the dependent variable ($\Delta y_t$) were accidentally included as regressors in multiple models (`aardl`, `mtnardl`, `rolling_ardl`). This previously caused spurious $R^2 = 1$ in some cases.
+3.  **Unified Lag Definitions**: Synchronized the interpretation of $p$ (dependent lags) and $q$ (independent lags) across all model types (Linear, Nonlinear, Panel, Fourier, and Quantile).
+4.  **Bootstrap ARDL Robustness**: Improved the internal data preparation for bootstrap procedures, ensuring that the restricted and unrestricted models are perfectly aligned in terms of sample size and lag structure.
 
 ## Enhanced Diagnostics
 

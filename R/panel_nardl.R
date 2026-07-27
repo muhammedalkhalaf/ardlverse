@@ -234,30 +234,33 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
       ec_lag <- ec_term[valid_idx - 1]
 
       # Lagged differences
-      design_list <- list(ec_lag = ec_lag)
+      design_list <- list()
+      design_list[[paste0("ec.", y_var, ".l1")]] <- ec_lag
 
       # Lagged dy
       if (p > 1) {
         for (j in 1:(p - 1)) {
-          design_list[[paste0("dy_l", j)]] <- diff(y)[(max_lag - j):(n - 1 - j)]
+          design_list[[paste0("d.", y_var, ".l", j)]] <- diff(y)[(max_lag - j):(n - 1 - j)]
         }
       }
 
       # Contemporaneous and lagged dx
       for (j in 1:k_total) {
+        x_name <- x_vars[j]
         dx_j <- diff(X[, j])
         for (l in 0:(q[min(j, length(q))] - 1)) {
-          design_list[[paste0("dx", j, "_l", l)]] <- dx_j[(max_lag - l):(n - 1 - l)]
+          suffix <- if (l == 0) "" else paste0(".l", l)
+          design_list[[paste0("d.", x_name, suffix)]] <- dx_j[(max_lag - l):(n - 1 - l)]
         }
       }
 
-      design <- do.call(cbind, design_list)
-
-      # Add intercept
-      design <- cbind(design, intercept = 1)
+      design_df <- as.data.frame(do.call(cbind, design_list))
+      design_df$intercept <- 1
 
       # Estimate
-      model_g <- stats::lm(dy ~ design - 1)
+      model_df <- data.frame(dy_val = dy, design_df)
+      colnames(model_df)[1] <- paste0("d.", y_var)
+      model_g <- stats::lm(as.formula(paste0("`", colnames(model_df)[1], "` ~ . - 1")), data = model_df)
       coefs_g <- stats::coef(model_g)
 
       ec_coefs[i] <- coefs_g[1]
@@ -272,7 +275,9 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
     lr_data <- .stack_lr_data(data, y_var, x_vars, id, time, phi_avg, sr_results, groups)
 
     if (nrow(lr_data$Y) > 0) {
-      lr_model <- stats::lm(lr_data$Y ~ lr_data$X - 1)
+      lr_df <- data.frame(Y = lr_data$Y, lr_data$X)
+      colnames(lr_df) <- c(paste0("tr.", y_var), x_vars)
+      lr_model <- stats::lm(as.formula(paste0("`", colnames(lr_df)[1], "` ~ . - 1")), data = lr_df)
       lr_coefs <- stats::coef(lr_model)
     }
 
@@ -417,23 +422,34 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
       for (j in 1:(p - 1)) {
         dy_lags[, j] <- diff(y)[(max_lag - j):(n - 1 - j)]
       }
+      colnames(dy_lags) <- paste0("d.", y_var, ".l", 1:(p - 1))
     }
 
     # Lagged dx
     dx_list <- list()
     for (j in 1:k_total) {
+      x_name <- x_vars[j]
       dx_j <- diff(X[, j])
       dx_lags_j <- matrix(NA, length(valid_idx), q[min(j, length(q))])
       for (l in 0:(q[min(j, length(q))] - 1)) {
         dx_lags_j[, l + 1] <- dx_j[(max_lag - l):(n - 1 - l)]
       }
+      colnames(dx_lags_j) <- if (q[min(j, length(q))] > 1) {
+        c(paste0("d.", x_name), paste0("d.", x_name, ".l", 1:(q[min(j, length(q))] - 1)))
+      } else {
+        paste0("d.", x_name)
+      }
       dx_list[[j]] <- dx_lags_j
     }
     dx_all <- do.call(cbind, dx_list)
+    
+    y_lag_mat <- matrix(y_lag, ncol = 1)
+    colnames(y_lag_mat) <- paste0(y_var, ".l1")
+    colnames(x_lag) <- paste0(x_vars, ".l1")
 
     all_data[[as.character(g)]] <- list(
       dy = dy,
-      y_lag = y_lag,
+      y_lag = y_lag_mat,
       x_lag = x_lag,
       dy_lags = dy_lags,
       dx_all = dx_all
@@ -450,7 +466,9 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
   }))
 
   # Estimate
-  model <- stats::lm(dy_stack ~ design_stack - 1)
+  model_df <- data.frame(dy_stack, design_stack)
+  colnames(model_df)[1] <- paste0("d.", y_var)
+  model <- stats::lm(as.formula(paste0("`", colnames(model_df)[1], "` ~ . - 1")), data = model_df)
   coefs <- stats::coef(model)
   vcov_mat <- stats::vcov(model)
   se <- sqrt(diag(vcov_mat))
@@ -497,25 +515,35 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
   x_lag <- X[valid_idx - 1, , drop = FALSE]
 
   # Build design
-  design <- cbind(y_lag, x_lag)
+  design_list <- list()
+  design_list[[paste0(y_var, ".l1")]] <- y[valid_idx - 1]
+  
+  for (j in 1:k) {
+    design_list[[paste0(x_vars[j], ".l1")]] <- X[valid_idx - 1, j]
+  }
 
   # Add lagged differences
   if (p > 1) {
     for (j in 1:(p - 1)) {
-      design <- cbind(design, diff(y)[(max_lag - j):(n - 1 - j)])
+      design_list[[paste0("d.", y_var, ".l", j)]] <- diff(y)[(max_lag - j):(n - 1 - j)]
     }
   }
   
   for (j in 1:k) {
     dx_j <- diff(X[, j])
     for (l in 0:(q[min(j, length(q))] - 1)) {
-      design <- cbind(design, dx_j[(max_lag - l):(n - 1 - l)])
+      suffix <- if (l == 0) "" else paste0(".l", l)
+      design_list[[paste0("d.", x_vars[j], suffix)]] <- dx_j[(max_lag - l):(n - 1 - l)]
     }
   }
   
-  design <- cbind(design, 1)  # intercept
+  design_df <- as.data.frame(design_list)
+  design_df$intercept <- 1
   
-  model <- stats::lm(dy ~ design - 1)
+  model_df <- data.frame(dy_val = dy, design_df)
+  colnames(model_df)[1] <- paste0("d.", y_var)
+  
+  model <- stats::lm(as.formula(paste0("`", colnames(model_df)[1], "` ~ . - 1")), data = model_df)
   coefs <- stats::coef(model)
   
   ec_coef <- coefs[1]

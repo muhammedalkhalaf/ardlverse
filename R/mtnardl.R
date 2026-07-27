@@ -147,27 +147,37 @@ mtnardl <- function(formula, data, thresholds = c(0), p = 1, q = 1, case = 3,
     for (i in 0:(q_j - 1)) {
       x_diff_j[, i + 1] <- dx_j[(max_lag - i):(n - 1 - i)]
     }
+    colnames(x_diff_j) <- if (q_j > 1) {
+      c(paste0("d.", regime_names[j]), paste0("d.", regime_names[j], ".l", 1:(q_j - 1)))
+    } else {
+      paste0("d.", regime_names[j])
+    }
     x_diff_list[[j]] <- x_diff_j
   }
-  colnames(x_levels) <- regime_names
+  colnames(x_levels) <- paste0(regime_names, ".l1")
   
   # Combine difference terms
   x_diffs <- do.call(cbind, x_diff_list)
   
   # Build design matrix
-  design <- cbind(y_lag, x_levels, dy_lags, x_diffs)
+  design <- data.frame(y_lag, x_levels)
+  if (!is.null(dy_lags)) design <- cbind(design, dy_lags)
+  design <- cbind(design, x_diffs)
+  colnames(design)[1] <- paste0(y_var, ".l1")
   
   # Add deterministic components
   if (case >= 2) {
-    design <- cbind(design, intercept = 1)
+    design$intercept <- 1
   }
   if (case >= 4) {
-    trend <- 1:n_valid
-    design <- cbind(design, trend = trend)
+    design$trend <- 1:n_valid
   }
   
   # Estimate model
-  model <- stats::lm(dy ~ design - 1)
+  model_df <- data.frame(dy_val = dy, design)
+  colnames(model_df)[1] <- paste0("d.", y_var)
+  
+  model <- stats::lm(as.formula(paste0("`", colnames(model_df)[1], "` ~ . - 1")), data = model_df)
   coefs <- stats::coef(model)
   vcov_mat <- stats::vcov(model)
   

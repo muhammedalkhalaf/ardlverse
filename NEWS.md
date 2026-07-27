@@ -13,8 +13,9 @@ Critical audit of the entire package led to significant fixes in model design an
 
 1.  **Corrected CUSUM/CUSUMSQ Bounds**: Re-implemented the critical bounds for stability tests following Brown, Durbin, and Evans (1975). The bounds are now correctly non-linear and fan out as expected.
 2.  **Panel-Aware Serial Correlation**: The Breusch-Godfrey LM test (`ardl_diagnostics`) now supports panel data. It correctly computes lagged residuals within groups (avoiding "cross-contamination" at unit boundaries).
-3.  **Improved Heteroskedasticity Tests**: "Manual" implementations of Breusch-Pagan and ARCH tests now correctly include all model regressors, which is essential for valid inference in dynamic ARDL models.
-4.  **MT-NARDL Support**: `ardl_diagnostics` now fully supports Multiple-Threshold NARDL models.
+3.  **Augmented ARDL (AARDL) Diagnostics**: `aardl` models now feature a full diagnostic suite including Ramsey RESET, CUSUM/CUSUMSQ stability tests, and automated residuals visualization via `plot()`.
+4.  **Improved Heteroskedasticity Tests**: "Manual" implementations of Breusch-Pagan and ARCH tests now correctly include all model regressors, which is essential for valid inference in dynamic ARDL models.
+5.  **MT-NARDL Support**: `ardl_diagnostics` now fully supports Multiple-Threshold NARDL models.
 
 ## Panel Data Updates
 

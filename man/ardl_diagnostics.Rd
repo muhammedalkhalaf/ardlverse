@@ -15,7 +15,7 @@ ardl_diagnostics(model, lags = 4, arch_lags = 4)
 \method{plot}{ardl_diagnostics}(x, which = 1:4, ...)
 }
 \arguments{
-  \item{model}{An estimated model object (panel_ardl, boot_ardl, qnardl, mtnardl, or fourier_ardl)}
+  \item{model}{An estimated model object (aardl, panel_ardl, boot_ardl, qnardl, mtnardl, or fourier_ardl)}
   \item{lags}{Integer. Number of lags for serial correlation tests (default: 4)}
   \item{arch_lags}{Integer. Number of lags for ARCH test (default: 4)}
   \item{object, x}{An object of class "ardl_diagnostics"}

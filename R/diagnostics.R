@@ -17,7 +17,7 @@
 #'         Brown, Durbin, and Evans (1975) methodology.
 #' }
 #'
-#' @param model An estimated model object (panel_ardl, boot_ardl, qnardl, mtnardl, or fourier_ardl)
+#' @param model An estimated model object (aardl, panel_ardl, boot_ardl, qnardl, mtnardl, or fourier_ardl)
 #' @param lags Integer. Number of lags for serial correlation tests (default: 4)
 #' @param arch_lags Integer. Number of lags for ARCH test (default: 4)
 #'
@@ -69,8 +69,13 @@ ardl_diagnostics <- function(model, lags = 4, arch_lags = 4) {
     fitted_vals <- model$results_by_tau[[tau_50]]$fitted
     lm_model <- model$results_by_tau[[tau_50]]$model
     X <- tryCatch(model.matrix(lm_model), error = function(e) NULL)
+  } else if (inherits(model, "aardl")) {
+    resid <- residuals(model$model)
+    fitted_vals <- fitted(model$model)
+    lm_model <- model$model
+    X <- tryCatch(model.matrix(lm_model), error = function(e) NULL)
   } else {
-    stop("Model must be of class panel_ardl, boot_ardl, qnardl, mtnardl, or fourier_ardl")
+    stop("Model must be of class aardl, panel_ardl, boot_ardl, qnardl, mtnardl, or fourier_ardl")
   }
 
   n <- length(resid)
@@ -116,7 +121,9 @@ ardl_diagnostics <- function(model, lags = 4, arch_lags = 4) {
   if (!is.null(lm_model)) {
     results$reset <- tryCatch({
       lmtest::resettest(lm_model, power = 2:3)
-    }, error = function(e) NULL)
+    }, error = function(e) {
+      .manual_reset_test(lm_model, power = 2:3)
+    })
   }
 
   # 8. CUSUM Statistics
@@ -132,6 +139,48 @@ ardl_diagnostics <- function(model, lags = 4, arch_lags = 4) {
 
   class(results) <- c("ardl_diagnostics", "list")
   return(results)
+}
+
+
+#' @title Manual RESET Test
+#' @keywords internal
+.manual_reset_test <- function(model, power = 2:3) {
+  
+  # Extract components from original model
+  resid <- residuals(model)
+  fitted_vals <- fitted(model)
+  n <- length(resid)
+  
+  # Get original design matrix
+  X_orig <- model.matrix(model)
+  
+  # Create powers of fitted values
+  X_powers <- sapply(power, function(p) fitted_vals^p)
+  colnames(X_powers) <- paste0("fitted_pow", power)
+  
+  # Combine data
+  df_aux <- data.frame(y = model$model[[1]], X_orig, X_powers)
+  
+  # Estimate augmented model
+  # We use -1 if the original model had no intercept (handled by X_orig)
+  model_aug <- lm(y ~ . - 1, data = df_aux)
+  
+  # Wald/F test on the coefficients of powers
+  # This is a simplified F-test (RSS_r - RSS_u)/q / (RSS_u / (n-k))
+  rss_r <- sum(resid^2)
+  rss_u <- sum(residuals(model_aug)^2)
+  q <- length(power)
+  k_u <- length(coef(model_aug))
+  
+  f_stat <- ((rss_r - rss_u) / q) / (rss_u / (n - k_u))
+  p_value <- 1 - pf(f_stat, q, n - k_u)
+  
+  list(
+    statistic = c(F = f_stat),
+    parameter = c(df1 = q, df2 = n - k_u),
+    p.value = p_value,
+    method = "Ramsey RESET Test"
+  )
 }
 
 

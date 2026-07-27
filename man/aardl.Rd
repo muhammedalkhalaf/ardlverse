@@ -2,6 +2,7 @@
 \alias{aardl}
 \alias{print.aardl}
 \alias{summary.aardl}
+\alias{plot.aardl}
 \title{Augmented ARDL Bounds Test (AARDL)}
 \description{
 Implements the Augmented ARDL bounds testing approach with deferred t and F tests 
@@ -15,6 +16,7 @@ aardl(formula, data, p = 1, q = 1, case = 3,
 
 \method{print}{aardl}(x, ...)
 \method{summary}{aardl}(object, ...)
+\method{plot}{aardl}(x, ...)
 }
 \arguments{
 \item{formula}{A formula specifying the model: gdp ~ investment + trade + ...}

@@ -279,12 +279,7 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
   )
   
   # === Diagnostic tests ===
-  resid <- stats::residuals(model)
-  diagnostics <- list(
-    serial_corr = .breusch_godfrey_test(resid, 2),
-    heteroskedasticity = .breusch_pagan_test(model),
-    normality = stats::shapiro.test(resid)$p.value
-  )
+  # We compute them after defining the object class to use ardl_diagnostics
   
   # Build result
   result <- list(
@@ -299,7 +294,6 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
     long_run = lr_coefs,
     short_run = sr_coefs,
     fit = fit_stats,
-    diagnostics = diagnostics,
     call = match.call(),
     type = type,
     case = case,
@@ -311,6 +305,10 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
   )
   
   class(result) <- "aardl"
+  
+  # Enrich diagnostics using the general diagnostic function
+  result$diagnostics <- ardl_diagnostics(result)
+  
   return(result)
 }
 
@@ -553,6 +551,24 @@ print.aardl <- function(x, ...) {
 }
 
 
+#' @title Plot Diagnostics for AARDL Model
+#' @description Provides diagnostic plots for Augmented ARDL models, 
+#'   including residuals analysis and CUSUM/CUSUMSQ stability tests.
+#' 
+#' @param x An aardl object
+#' @param ... Additional arguments passed to plot.ardl_diagnostics
+#' 
+#' @export
+plot.aardl <- function(x, ...) {
+  if (is.null(x$diagnostics)) {
+    diag <- ardl_diagnostics(x)
+  } else {
+    diag <- x$diagnostics
+  }
+  plot(diag, ...)
+}
+
+
 #' @export
 summary.aardl <- function(object, ...) {
   cat("\n")
@@ -605,9 +621,23 @@ summary.aardl <- function(object, ...) {
   
   cat("\nDiagnostic Tests (p-values):\n")
   cat("-----------------------------------------------\n")
-  cat(sprintf("  Serial correlation (BG): %.4f\n", object$diagnostics$serial_corr$p.value))
-  cat(sprintf("  Heteroskedasticity (BP): %.4f\n", object$diagnostics$heteroskedasticity$p.value))
-  cat(sprintf("  Normality (Shapiro):     %.4f\n", object$diagnostics$normality))
+  
+  .print_diag <- function(label, diag_obj) {
+    p_val <- if (!is.null(diag_obj)) diag_obj$p.value else NA
+    cat(sprintf("  %-25s %.4f\n", label, p_val))
+  }
+  
+  .print_diag("Serial correlation (BG):", object$diagnostics$serial_corr)
+  .print_diag("Heteroskedasticity (BP):", object$diagnostics$hetero_bp)
+  .print_diag("ARCH test:", object$diagnostics$arch)
+  .print_diag("Normality (JB):", object$diagnostics$normality)
+  .print_diag("Functional form (RESET):", object$diagnostics$reset)
+  
+  # CUSUM status
+  cusum_status <- if (!is.null(object$diagnostics$cusum) && object$diagnostics$cusum$crosses_bounds) "OUTSIDE BOUNDS" else "Stable"
+  cusumsq_status <- if (!is.null(object$diagnostics$cusumsq) && object$diagnostics$cusumsq$crosses_bounds) "OUTSIDE BOUNDS" else "Stable"
+  cat(sprintf("  Stability (CUSUM):       %s\n", cusum_status))
+  cat(sprintf("  Stability (CUSUMSQ):     %s\n", cusumsq_status))
   
   cat("\n===============================================\n")
   cat("CONCLUSION:", object$conclusion$decision, "\n")

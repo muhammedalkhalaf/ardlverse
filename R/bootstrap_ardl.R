@@ -204,14 +204,17 @@ boot_ardl <- function(formula, data, p = 1, q = 1, case = 3,
   }
   
   # Combine
-  result <- data.frame(
-    dy = dy[-1],
-    y_lag1 = y_lag1[-1],
-    X_levels[-1, , drop = FALSE],
-    X_diff[-1, , drop = FALSE]
-  )
+  result <- data.frame(dy = dy[-1], y_lag1 = y_lag1[-1])
   colnames(result)[1] <- paste0("d.", y_var)
   colnames(result)[2] <- paste0(y_var, ".l1")
+  
+  if (!is.null(X_levels)) {
+    result <- cbind(result, X_levels[-1, , drop = FALSE])
+  }
+  
+  if (!is.null(X_diff)) {
+    result <- cbind(result, X_diff[-1, , drop = FALSE])
+  }
   
   if (!is.null(dy_lags)) {
     result <- cbind(result, dy_lags[-1, , drop = FALSE])

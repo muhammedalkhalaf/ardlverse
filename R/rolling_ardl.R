@@ -258,8 +258,12 @@ rardl <- function(formula, data, method = c("rolling", "recursive"),
   x_diffs <- do.call(cbind, x_diff_list)
   
   # Design matrix
-  design <- data.frame(y_lag, x_levels, dy_lags, x_diffs)
-  colnames(design)[1] <- paste0(y_var, ".l1")
+  design <- data.frame(y_lag)
+  colnames(design) <- paste0(y_var, ".l1")
+  
+  if (!is.null(x_levels)) design <- cbind(design, x_levels)
+  if (!is.null(dy_lags)) design <- cbind(design, dy_lags)
+  if (!is.null(x_diffs)) design <- cbind(design, x_diffs)
   
   if (case >= 2) design$intercept <- 1
   if (case >= 4) design$trend <- 1:n_valid

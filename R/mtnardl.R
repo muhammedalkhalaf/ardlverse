@@ -380,7 +380,11 @@ mtnardl <- function(formula, data, thresholds = c(0), p = 1, q = 1, case = 3,
 .mtnardl_bootstrap <- function(dy, design, n_level, nboot) {
   n <- length(dy)
   
-  model_null <- stats::lm(dy ~ design[, -(1:n_level)] - 1)
+  df_null <- data.frame(dy = dy)
+  design_null <- design[, -(1:n_level), drop = FALSE]
+  if (ncol(design_null) > 0) df_null <- cbind(df_null, design_null)
+  
+  model_null <- stats::lm(dy ~ . - 1, data = df_null)
   resid_null <- stats::residuals(model_null)
   fitted_null <- stats::fitted(model_null)
   
@@ -391,7 +395,10 @@ mtnardl <- function(formula, data, thresholds = c(0), p = 1, q = 1, case = 3,
     boot_resid <- sample(resid_null, n, replace = TRUE)
     boot_y <- fitted_null + boot_resid
     
-    boot_model <- stats::lm(boot_y ~ design - 1)
+    df_boot <- data.frame(boot_y = boot_y)
+    if (!is.null(design) && ncol(design) > 0) df_boot <- cbind(df_boot, design)
+    
+    boot_model <- stats::lm(boot_y ~ . - 1, data = df_boot)
     boot_coefs <- stats::coef(boot_model)
     boot_vcov <- stats::vcov(boot_model)
     

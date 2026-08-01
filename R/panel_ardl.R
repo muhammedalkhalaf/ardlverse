@@ -189,11 +189,18 @@ panel_ardl <- function(formula, data, id, time, p = 1, q = 1,
   }
 
   # Combine and drop rows with any NA
-  df <- data.frame(dy = dy, y_lag1 = y_lag1, .time = time_vec,
-                   X_levels, X_diff,
-                   check.names = FALSE)
+  df <- data.frame(dy = dy, y_lag1 = y_lag1, .time = time_vec)
   colnames(df)[1] <- paste0("d.", y_var)
   colnames(df)[2] <- paste0(y_var, ".l1")
+  
+  if (!is.null(X_levels)) {
+    df <- cbind(df, X_levels)
+  }
+  
+  if (!is.null(X_diff)) {
+    df <- cbind(df, X_diff)
+  }
+  
   df <- na.omit(df)
 
   # Apply start_time filter AFTER lag computation (mirrors Stata's "if year>=X")

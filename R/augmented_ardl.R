@@ -179,7 +179,11 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
   x_diffs <- do.call(cbind, x_diff_list)
   
   # Build design matrix
-  design <- data.frame(y_lag, x_levels, dy_lags, x_diffs)
+  design <- data.frame(y_lag = y_lag)
+  design <- cbind(design, x_levels)
+  if (!is.null(dy_lags)) design <- cbind(design, dy_lags)
+  if (!is.null(x_diffs)) design <- cbind(design, x_diffs)
+  
   colnames(design)[1] <- paste0(y_var, ".l1")
   
   # Ensure x_diffs have good names if not already set
@@ -378,7 +382,11 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
   n <- length(dy)
   
   # Estimate null model (no cointegration)
-  model_null <- stats::lm(dy ~ design[, -(1:n_level)] - 1)
+  df_null <- data.frame(dy = dy)
+  design_null <- design[, -(1:n_level), drop = FALSE]
+  if (ncol(design_null) > 0) df_null <- cbind(df_null, design_null)
+  
+  model_null <- stats::lm(dy ~ . - 1, data = df_null)
   resid_null <- stats::residuals(model_null)
   fitted_null <- stats::fitted(model_null)
   
@@ -392,7 +400,10 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
     boot_y <- fitted_null + boot_resid
     
     # Estimate full model on bootstrap sample
-    boot_model <- stats::lm(boot_y ~ design - 1)
+    df_boot <- data.frame(boot_y = boot_y)
+    if (!is.null(design) && ncol(design) > 0) df_boot <- cbind(df_boot, design)
+    
+    boot_model <- stats::lm(boot_y ~ . - 1, data = df_boot)
     boot_coefs <- stats::coef(boot_model)
     boot_vcov <- stats::vcov(boot_model)
     

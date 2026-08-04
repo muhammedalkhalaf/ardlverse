@@ -146,20 +146,22 @@ fourier_ardl <- function(formula, data, p = 1, q = 1, k = 1, case = 3,
   }
   
   # Estimate model
-  y_col <- "dy"
-  x_cols <- setdiff(names(model_data), "dy")
+  y_col <- paste0("d.", y_var)
+  x_cols <- setdiff(names(model_data), y_col)
   
-  formula_str <- paste(y_col, "~", paste(x_cols, collapse = " + "))
+  formula_str <- paste(paste0("`", y_col, "`"), "~", paste(x_cols, collapse = " + "))
   model <- lm(as.formula(formula_str), data = model_data)
   
   coefs <- coef(model)
   se <- summary(model)$coefficients[, 2]
   
   # Extract components
-  phi <- coefs["y_lag1"]
+  phi_name <- paste0(y_var, ".l1")
+  phi <- coefs[phi_name]
   
   # Long-run coefficients
-  level_idx <- which(names(coefs) %in% x_vars)
+  theta_vars <- paste0(x_vars, ".l1")
+  level_idx <- which(names(coefs) %in% theta_vars)
   if (length(level_idx) > 0) {
     beta <- coefs[level_idx]
     theta <- -beta / phi
@@ -177,13 +179,13 @@ fourier_ardl <- function(formula, data, p = 1, q = 1, k = 1, case = 3,
   RSS_ur <- sum(residuals(model)^2)
   
   # Restricted model (no levels)
-  x_cols_r <- x_cols[!x_cols %in% c("y_lag1", x_vars)]
+  x_cols_r <- x_cols[!x_cols %in% c(phi_name, theta_vars)]
   if (length(x_cols_r) > 0) {
-    formula_r <- paste(y_col, "~", paste(x_cols_r, collapse = " + "))
+    formula_r <- paste(paste0("`", y_col, "`"), "~", paste(x_cols_r, collapse = " + "))
     model_r <- lm(as.formula(formula_r), data = model_data)
     RSS_r <- sum(residuals(model_r)^2)
   } else {
-    RSS_r <- sum((model_data$dy - mean(model_data$dy))^2)
+    RSS_r <- sum((model_data[[y_col]] - mean(model_data[[y_col]]))^2)
   }
   
   m <- length(x_vars) + 1  # Number of restrictions
@@ -193,7 +195,7 @@ fourier_ardl <- function(formula, data, p = 1, q = 1, k = 1, case = 3,
   F_stat <- ((RSS_r - RSS_ur) / m) / (RSS_ur / (n_obs - k_ur))
   
   # t-statistic for phi
-  t_stat <- coefs["y_lag1"] / se["y_lag1"]
+  t_stat <- coefs[phi_name] / se[phi_name]
   
   # Model fit statistics
   sigma2 <- sum(residuals(model)^2) / (n_obs - k_ur)
@@ -258,31 +260,33 @@ fourier_ardl <- function(formula, data, p = 1, q = 1, k = 1, case = 3,
     dy = dy,
     y_lag1 = y_lag1
   )
+  colnames(result)[1] <- paste0("d.", y_var)
+  colnames(result)[2] <- paste0(y_var, ".l1")
   
   # X variables in levels
   for (v in x_vars) {
-    result[[v]] <- data[[v]][-n]
+    result[[paste0(v, ".l1")]] <- data[[v]][-n]
   }
   
   # X variables in differences
   for (j in seq_along(x_vars)) {
     v <- x_vars[j]
     dx <- diff(data[[v]])
-    result[[paste0("d_", v)]] <- dx
+    result[[paste0("d.", v)]] <- dx
     
     # Lagged differences
-    if (q[j] > 0) {
-      for (lag in 1:q[j]) {
+    if (q[j] > 1) {
+      for (lag in 1:(q[j] - 1)) {
         lagged <- c(rep(NA, lag), dx[1:(length(dx) - lag)])
-        result[[paste0("d_", v, "_L", lag)]] <- lagged
+        result[[paste0("d.", v, ".l", lag)]] <- lagged
       }
     }
   }
-  
+
   # Lagged dy
   if (p > 1) {
     for (lag in 1:(p-1)) {
-      result[[paste0("dy_L", lag)]] <- c(rep(NA, lag), dy[1:(length(dy) - lag)])
+      result[[paste0("d.", y_var, ".l", lag)]] <- c(rep(NA, lag), dy[1:(length(dy) - lag)])
     }
   }
   

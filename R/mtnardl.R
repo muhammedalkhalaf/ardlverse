@@ -124,11 +124,14 @@ mtnardl <- function(formula, data, thresholds = c(0), p = 1, q = 1, case = 3,
   y_lag <- y[valid_idx - 1]
   
   # Lagged differences of dependent variable
-  dy_lags <- matrix(NA, n_valid, p)
-  for (i in 1:p) {
-    dy_lags[, i] <- diff(y)[(max_lag - i + 1):(n - i)]
+  dy_lags <- NULL
+  if (p > 1) {
+    dy_lags <- matrix(NA, n_valid, p - 1)
+    for (i in 1:(p - 1)) {
+      dy_lags[, i] <- diff(y)[(max_lag - i):(n - 1 - i)]
+    }
+    colnames(dy_lags) <- paste0("d.", y_var, ".l", 1:(p - 1))
   }
-  colnames(dy_lags) <- paste0("d.", y_var, ".l", 1:p)
   
   # Decomposed variables: levels and differences
   x_levels <- matrix(NA, n_valid, k_total)
@@ -144,27 +147,37 @@ mtnardl <- function(formula, data, thresholds = c(0), p = 1, q = 1, case = 3,
     for (i in 0:(q_j - 1)) {
       x_diff_j[, i + 1] <- dx_j[(max_lag - i):(n - 1 - i)]
     }
+    colnames(x_diff_j) <- if (q_j > 1) {
+      c(paste0("d.", regime_names[j]), paste0("d.", regime_names[j], ".l", 1:(q_j - 1)))
+    } else {
+      paste0("d.", regime_names[j])
+    }
     x_diff_list[[j]] <- x_diff_j
   }
-  colnames(x_levels) <- regime_names
+  colnames(x_levels) <- paste0(regime_names, ".l1")
   
   # Combine difference terms
   x_diffs <- do.call(cbind, x_diff_list)
   
   # Build design matrix
-  design <- cbind(y_lag, x_levels, dy_lags, x_diffs)
+  design <- data.frame(y_lag, x_levels)
+  if (!is.null(dy_lags)) design <- cbind(design, dy_lags)
+  design <- cbind(design, x_diffs)
+  colnames(design)[1] <- paste0(y_var, ".l1")
   
   # Add deterministic components
   if (case >= 2) {
-    design <- cbind(design, intercept = 1)
+    design$intercept <- 1
   }
   if (case >= 4) {
-    trend <- 1:n_valid
-    design <- cbind(design, trend = trend)
+    design$trend <- 1:n_valid
   }
   
   # Estimate model
-  model <- stats::lm(dy ~ design - 1)
+  model_df <- data.frame(dy_val = dy, design)
+  colnames(model_df)[1] <- paste0("d.", y_var)
+  
+  model <- stats::lm(as.formula(paste0("`", colnames(model_df)[1], "` ~ . - 1")), data = model_df)
   coefs <- stats::coef(model)
   vcov_mat <- stats::vcov(model)
   
@@ -367,7 +380,11 @@ mtnardl <- function(formula, data, thresholds = c(0), p = 1, q = 1, case = 3,
 .mtnardl_bootstrap <- function(dy, design, n_level, nboot) {
   n <- length(dy)
   
-  model_null <- stats::lm(dy ~ design[, -(1:n_level)] - 1)
+  df_null <- data.frame(dy = dy)
+  design_null <- design[, -(1:n_level), drop = FALSE]
+  if (ncol(design_null) > 0) df_null <- cbind(df_null, design_null)
+  
+  model_null <- stats::lm(dy ~ . - 1, data = df_null)
   resid_null <- stats::residuals(model_null)
   fitted_null <- stats::fitted(model_null)
   
@@ -378,7 +395,10 @@ mtnardl <- function(formula, data, thresholds = c(0), p = 1, q = 1, case = 3,
     boot_resid <- sample(resid_null, n, replace = TRUE)
     boot_y <- fitted_null + boot_resid
     
-    boot_model <- stats::lm(boot_y ~ design - 1)
+    df_boot <- data.frame(boot_y = boot_y)
+    if (!is.null(design) && ncol(design) > 0) df_boot <- cbind(df_boot, design)
+    
+    boot_model <- stats::lm(boot_y ~ . - 1, data = df_boot)
     boot_coefs <- stats::coef(boot_model)
     boot_vcov <- stats::vcov(boot_model)
     

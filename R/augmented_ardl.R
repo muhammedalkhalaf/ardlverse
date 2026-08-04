@@ -138,11 +138,14 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
   y_lag <- y[valid_idx - 1]
   
   # Lagged differences of dependent variable
-  dy_lags <- matrix(NA, n_valid, p)
-  for (i in 1:p) {
-    dy_lags[, i] <- diff(y)[(max_lag - i + 1):(n - i)]
+  dy_lags <- NULL
+  if (p > 1) {
+    dy_lags <- matrix(NA, n_valid, p - 1)
+    for (i in 1:(p - 1)) {
+      dy_lags[, i] <- diff(y)[(max_lag - i):(n - 1 - i)]
+    }
+    colnames(dy_lags) <- paste0("d.", y_var, ".l", 1:(p - 1))
   }
-  colnames(dy_lags) <- paste0("d.", y_var, ".l", 1:p)
   
   # Independent variables: levels and differences
   x_levels <- matrix(NA, n_valid, k)
@@ -154,31 +157,44 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
     
     dx_j <- diff(x_j)
     x_diff_j <- matrix(NA, n_valid, q[min(j, length(q))])
+    x_name <- if (use_nardl) x_vars_new[j] else x_vars[j]
     for (i in 0:(q[min(j, length(q))] - 1)) {
       x_diff_j[, i + 1] <- dx_j[(max_lag - i):(n - 1 - i)]
+    }
+    colnames(x_diff_j) <- if (q[min(j, length(q))] > 1) {
+      c(paste0("d.", x_name), paste0("d.", x_name, ".l", 1:(q[min(j, length(q))] - 1)))
+    } else {
+      paste0("d.", x_name)
     }
     x_diff_list[[j]] <- x_diff_j
   }
   
   if (use_nardl) {
-    colnames(x_levels) <- x_vars_new
+    colnames(x_levels) <- paste0(x_vars_new, ".l1")
   } else {
-    colnames(x_levels) <- x_vars
+    colnames(x_levels) <- paste0(x_vars, ".l1")
   }
   
   # Combine difference terms
   x_diffs <- do.call(cbind, x_diff_list)
   
   # Build design matrix
-  design <- cbind(y_lag, x_levels, dy_lags, x_diffs)
+  design <- data.frame(y_lag = y_lag)
+  design <- cbind(design, x_levels)
+  if (!is.null(dy_lags)) design <- cbind(design, dy_lags)
+  if (!is.null(x_diffs)) design <- cbind(design, x_diffs)
+  
+  colnames(design)[1] <- paste0(y_var, ".l1")
+  
+  # Ensure x_diffs have good names if not already set
+  # (x_levels already has names from line 167/169)
   
   # Add deterministic components
   if (case >= 2) {
-    design <- cbind(design, intercept = 1)
+    design$intercept <- 1
   }
   if (case >= 4) {
-    trend <- 1:n_valid
-    design <- cbind(design, trend = trend)
+    design$trend <- 1:n_valid
   }
   
   # Add Fourier terms
@@ -188,7 +204,11 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
   }
   
   # Estimate model
-  model <- stats::lm(dy ~ design - 1)
+  model_df <- data.frame(dy = dy, design)
+  colnames(model_df)[1] <- paste0("d.", y_var)
+  
+  formula_ardl <- as.formula(paste0("`d.", y_var, "` ~ . - 1"))
+  model <- stats::lm(formula_ardl, data = model_df)
   coefs <- stats::coef(model)
   vcov_mat <- stats::vcov(model)
   
@@ -263,12 +283,7 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
   )
   
   # === Diagnostic tests ===
-  resid <- stats::residuals(model)
-  diagnostics <- list(
-    serial_corr = .breusch_godfrey_test(resid, 2),
-    heteroskedasticity = .breusch_pagan_test(model),
-    normality = stats::shapiro.test(resid)$p.value
-  )
+  # We compute them after defining the object class to use ardl_diagnostics
   
   # Build result
   result <- list(
@@ -283,7 +298,6 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
     long_run = lr_coefs,
     short_run = sr_coefs,
     fit = fit_stats,
-    diagnostics = diagnostics,
     call = match.call(),
     type = type,
     case = case,
@@ -295,6 +309,10 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
   )
   
   class(result) <- "aardl"
+  
+  # Enrich diagnostics using the general diagnostic function
+  result$diagnostics <- ardl_diagnostics(result)
+  
   return(result)
 }
 
@@ -364,7 +382,11 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
   n <- length(dy)
   
   # Estimate null model (no cointegration)
-  model_null <- stats::lm(dy ~ design[, -(1:n_level)] - 1)
+  df_null <- data.frame(dy = dy)
+  design_null <- design[, -(1:n_level), drop = FALSE]
+  if (ncol(design_null) > 0) df_null <- cbind(df_null, design_null)
+  
+  model_null <- stats::lm(dy ~ . - 1, data = df_null)
   resid_null <- stats::residuals(model_null)
   fitted_null <- stats::fitted(model_null)
   
@@ -378,7 +400,10 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
     boot_y <- fitted_null + boot_resid
     
     # Estimate full model on bootstrap sample
-    boot_model <- stats::lm(boot_y ~ design - 1)
+    df_boot <- data.frame(boot_y = boot_y)
+    if (!is.null(design) && ncol(design) > 0) df_boot <- cbind(df_boot, design)
+    
+    boot_model <- stats::lm(boot_y ~ . - 1, data = df_boot)
     boot_coefs <- stats::coef(boot_model)
     boot_vcov <- stats::vcov(boot_model)
     
@@ -537,6 +562,24 @@ print.aardl <- function(x, ...) {
 }
 
 
+#' @title Plot Diagnostics for AARDL Model
+#' @description Provides diagnostic plots for Augmented ARDL models, 
+#'   including residuals analysis and CUSUM/CUSUMSQ stability tests.
+#' 
+#' @param x An aardl object
+#' @param ... Additional arguments passed to plot.ardl_diagnostics
+#' 
+#' @export
+plot.aardl <- function(x, ...) {
+  if (is.null(x$diagnostics)) {
+    diag <- ardl_diagnostics(x)
+  } else {
+    diag <- x$diagnostics
+  }
+  plot(diag, ...)
+}
+
+
 #' @export
 summary.aardl <- function(object, ...) {
   cat("\n")
@@ -589,9 +632,23 @@ summary.aardl <- function(object, ...) {
   
   cat("\nDiagnostic Tests (p-values):\n")
   cat("-----------------------------------------------\n")
-  cat(sprintf("  Serial correlation (BG): %.4f\n", object$diagnostics$serial_corr$p.value))
-  cat(sprintf("  Heteroskedasticity (BP): %.4f\n", object$diagnostics$heteroskedasticity$p.value))
-  cat(sprintf("  Normality (Shapiro):     %.4f\n", object$diagnostics$normality))
+  
+  .print_diag <- function(label, diag_obj) {
+    p_val <- if (!is.null(diag_obj)) diag_obj$p.value else NA
+    cat(sprintf("  %-25s %.4f\n", label, p_val))
+  }
+  
+  .print_diag("Serial correlation (BG):", object$diagnostics$serial_corr)
+  .print_diag("Heteroskedasticity (BP):", object$diagnostics$hetero_bp)
+  .print_diag("ARCH test:", object$diagnostics$arch)
+  .print_diag("Normality (JB):", object$diagnostics$normality)
+  .print_diag("Functional form (RESET):", object$diagnostics$reset)
+  
+  # CUSUM status
+  cusum_status <- if (!is.null(object$diagnostics$cusum) && object$diagnostics$cusum$crosses_bounds) "OUTSIDE BOUNDS" else "Stable"
+  cusumsq_status <- if (!is.null(object$diagnostics$cusumsq) && object$diagnostics$cusumsq$crosses_bounds) "OUTSIDE BOUNDS" else "Stable"
+  cat(sprintf("  Stability (CUSUM):       %s\n", cusum_status))
+  cat(sprintf("  Stability (CUSUMSQ):     %s\n", cusumsq_status))
   
   cat("\n===============================================\n")
   cat("CONCLUSION:", object$conclusion$decision, "\n")

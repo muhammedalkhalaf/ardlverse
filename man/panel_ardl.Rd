@@ -54,6 +54,9 @@ An object of class \code{"panel_ardl"} with components:
   \item \code{short_run}: short-run coefficient summaries.
   \item \code{ec_coef}: error-correction coefficient (phi).
   \item \code{vcov}: variance-covariance matrix of long-run coefficients.
+  \item \code{residuals}: stacked residuals from the model.
+  \item \code{fitted}: fitted values.
+  \item \code{group_ids}: vector of group identifiers.
   \item \code{sigma}: residual standard error.
   \item \code{estimator}: the estimator used.
 }

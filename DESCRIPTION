@@ -1,7 +1,7 @@
 Package: ardlverse
 Type: Package
 Title: Comprehensive ARDL: Panel, Bootstrap and Fourier Methods
-Version: 2.0.0
+Version: 2.1.0
 Date: 2026-06-29
 Authors@R: c(
     person("Muhammad Abdullah", "Alkhalaf", 
@@ -13,7 +13,10 @@ Authors@R: c(
            comment = "Original Stata implementations"),
     person("Yeleazar", "Levchenko", 
            role = "ctb",
-           comment = "Bug fixes and PMG/MG/DFE corrections for panel_ardl in v2.0.0 (KSE)"))
+           comment = "Bug fixes and PMG/MG/DFE corrections for panel_ardl in v2.0.0 (KSE)"),
+    person("Steve", "Nouatin"
+           role = "ctb",
+           comment = "Model specification fixes, lag alignment corrections, and enhanced diagnostics in v2.1.0"))
 Description: A unified framework for Autoregressive Distributed Lag (ARDL) modeling 
     and cointegration analysis. Implements Panel ARDL with Pooled Mean Group (PMG), 
     Mean Group (MG), and Dynamic Fixed Effects (DFE) estimators following 

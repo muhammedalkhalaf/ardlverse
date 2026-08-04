@@ -45,6 +45,9 @@
 #'   \item \code{short_run}: short-run coefficient summaries.
 #'   \item \code{ec_coef}: error-correction coefficient (phi).
 #'   \item \code{vcov}: variance-covariance matrix of long-run coefficients.
+#'   \item \code{residuals}: stacked residuals from the model.
+#'   \item \code{fitted}: fitted values.
+#'   \item \code{group_ids}: vector of group identifiers.
 #'   \item \code{sigma}: residual standard error.
 #'   \item \code{estimator}: the estimator used.
 #' }
@@ -155,13 +158,14 @@ panel_ardl <- function(formula, data, id, time, p = 1, q = 1,
 
   # ECT "X" component: X at CURRENT period t -> rows 2:n
   X_levels <- as.matrix(data[2:n, x_vars, drop = FALSE])
+  colnames(X_levels) <- paste0(x_vars, ".l1")
 
   # Time vector aligned with dy (current period = t_vals[2:n])
   time_vec <- t_vals[2:n]
 
   # SR contemporaneous diffs  Dx_t
   X_diff <- do.call(cbind, lapply(x_vars, function(v) diff(data[[v]])))
-  colnames(X_diff) <- paste0("D.", x_vars)
+  colnames(X_diff) <- paste0("d.", x_vars)
 
   # SR lagged diffs of x: lags 1 ... q[j]-1
   for (j in seq_along(x_vars)) {
@@ -170,7 +174,7 @@ panel_ardl <- function(formula, data, id, time, p = 1, q = 1,
       for (lag in seq_len(q[j] - 1)) {
         col <- c(rep(NA_real_, lag), xd[seq_len(length(xd) - lag)])
         X_diff <- cbind(X_diff, col)
-        colnames(X_diff)[ncol(X_diff)] <- paste0("D.", x_vars[j], ".L", lag)
+        colnames(X_diff)[ncol(X_diff)] <- paste0("d.", x_vars[j], ".l", lag)
       }
     }
   }
@@ -180,14 +184,23 @@ panel_ardl <- function(formula, data, id, time, p = 1, q = 1,
     for (lag in seq_len(p - 1)) {
       col <- c(rep(NA_real_, lag), dy[seq_len(length(dy) - lag)])
       X_diff <- cbind(X_diff, col)
-      colnames(X_diff)[ncol(X_diff)] <- paste0("D.", y_var, ".L", lag)
+      colnames(X_diff)[ncol(X_diff)] <- paste0("d.", y_var, ".l", lag)
     }
   }
 
   # Combine and drop rows with any NA
-  df <- data.frame(dy = dy, y_lag1 = y_lag1, .time = time_vec,
-                   X_levels, X_diff,
-                   check.names = FALSE)
+  df <- data.frame(dy = dy, y_lag1 = y_lag1, .time = time_vec)
+  colnames(df)[1] <- paste0("d.", y_var)
+  colnames(df)[2] <- paste0(y_var, ".l1")
+  
+  if (!is.null(X_levels)) {
+    df <- cbind(df, X_levels)
+  }
+  
+  if (!is.null(X_diff)) {
+    df <- cbind(df, X_diff)
+  }
+  
   df <- na.omit(df)
 
   # Apply start_time filter AFTER lag computation (mirrors Stata's "if year>=X")
@@ -198,12 +211,15 @@ panel_ardl <- function(formula, data, id, time, p = 1, q = 1,
 
   if (nrow(df) < ncol(X_diff) + length(x_vars) + 3) return(NULL)
 
-  xd_cols <- setdiff(names(df), c("dy", "y_lag1", x_vars))
+  dy_name <- paste0("d.", y_var)
+  yl_name <- paste0(y_var, ".l1")
+  xl_names <- paste0(x_vars, ".l1")
+  xd_cols <- setdiff(names(df), c(dy_name, yl_name, xl_names))
 
   list(
-    dy       = df[["dy"]],
-    y_lag1   = df[["y_lag1"]],
-    X_levels = as.matrix(df[, x_vars,   drop = FALSE]),
+    dy       = df[[dy_name]],
+    y_lag1   = df[[yl_name]],
+    X_levels = as.matrix(df[, xl_names, drop = FALSE]),
     X_diff   = as.matrix(df[, xd_cols,  drop = FALSE]),
     n        = nrow(df)
   )
@@ -343,6 +359,10 @@ panel_ardl <- function(formula, data, id, time, p = 1, q = 1,
   fitted_all    <- do.call(c, fit_list)
   nobs          <- length(residuals_all)
 
+  group_ids_all <- do.call(c, lapply(seq_along(res_list), function(i) {
+    rep(groups[i], length(res_list[[i]]))
+  }))
+
   list(
     long_run      = theta_pmg,
     long_run_se   = theta_se,
@@ -358,6 +378,7 @@ panel_ardl <- function(formula, data, id, time, p = 1, q = 1,
     sigma2_group  = sig2_vec,
     residuals     = residuals_all,
     fitted        = fitted_all,
+    group_ids     = group_ids_all,
     nobs          = nobs,
     sigma         = sqrt(mean(residuals_all^2)),
     loglik        = loglik,
@@ -430,15 +451,17 @@ panel_ardl <- function(formula, data, id, time, p = 1, q = 1,
   sr_avg   <- mge$mean[sr_idx]
   sr_se    <- mge$se  [sr_idx]
 
-  # Residuals / fitted from full group regressions
+  # Residuals / fitted / group_ids
   res_list <- lapply(seq_along(gdata_list)[valid], function(ii) {
     gd     <- gdata_list[[ii]]
     X_full <- cbind(gd$y_lag1, gd$X_levels, gd$X_diff, 1)
     fit    <- lm.fit(X_full, gd$dy)
-    list(res = fit$residuals, fit = fit$fitted.values)
+    list(res = fit$residuals, fit = fit$fitted.values,
+         group = rep(groups[ii], length(fit$residuals)))
   })
   residuals_all <- do.call(c, lapply(res_list, `[[`, "res"))
   fitted_all    <- do.call(c, lapply(res_list, `[[`, "fit"))
+  group_ids_all <- do.call(c, lapply(res_list, `[[`, "group"))
   nobs          <- length(residuals_all)
 
   sig2   <- mean(residuals_all^2)
@@ -459,6 +482,7 @@ panel_ardl <- function(formula, data, id, time, p = 1, q = 1,
     group_theta   = do.call(rbind, lapply(group_results, `[[`, "theta")),
     residuals     = residuals_all,
     fitted        = fitted_all,
+    group_ids     = group_ids_all,
     nobs          = nobs,
     sigma         = sqrt(sig2),
     loglik        = loglik
@@ -579,6 +603,7 @@ panel_ardl <- function(formula, data, id, time, p = 1, q = 1,
     ec_se         = ec_se_val,
     residuals     = fit$residuals,
     fitted        = fit$fitted.values,
+    group_ids     = grp_vec,
     nobs          = n,
     sigma         = sqrt(s2_mle),
     loglik        = loglik

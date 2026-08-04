@@ -224,13 +224,18 @@ rardl <- function(formula, data, method = c("rolling", "recursive"),
   y_lag <- y[valid_idx - 1]
   
   # Lagged differences
-  dy_lags <- matrix(NA, n_valid, p)
-  for (i in 1:p) {
-    dy_lags[, i] <- diff(y)[(max_lag - i + 1):(n - i)]
+  dy_lags <- NULL
+  if (p > 1) {
+    dy_lags <- matrix(NA, n_valid, p - 1)
+    for (i in 1:(p - 1)) {
+      dy_lags[, i] <- diff(y)[(max_lag - i):(n - 1 - i)]
+    }
+    colnames(dy_lags) <- paste0("d.", y_var, ".l", 1:(p - 1))
   }
   
   # Independent variables
   x_levels <- matrix(NA, n_valid, k)
+  colnames(x_levels) <- paste0(x_vars, ".l1")
   x_diff_list <- list()
   
   for (j in 1:k) {
@@ -242,19 +247,32 @@ rardl <- function(formula, data, method = c("rolling", "recursive"),
     for (i in 0:(q[j] - 1)) {
       x_diff_j[, i + 1] <- dx_j[(max_lag - i):(n - 1 - i)]
     }
+    colnames(x_diff_j) <- if (q[j] > 1) {
+      c(paste0("d.", x_vars[j]), paste0("d.", x_vars[j], ".l", 1:(q[j] - 1)))
+    } else {
+      paste0("d.", x_vars[j])
+    }
     x_diff_list[[j]] <- x_diff_j
   }
   
   x_diffs <- do.call(cbind, x_diff_list)
   
   # Design matrix
-  design <- cbind(y_lag, x_levels, dy_lags, x_diffs)
+  design <- data.frame(y_lag)
+  colnames(design) <- paste0(y_var, ".l1")
   
-  if (case >= 2) design <- cbind(design, intercept = 1)
-  if (case >= 4) design <- cbind(design, trend = 1:n_valid)
+  if (!is.null(x_levels)) design <- cbind(design, x_levels)
+  if (!is.null(dy_lags)) design <- cbind(design, dy_lags)
+  if (!is.null(x_diffs)) design <- cbind(design, x_diffs)
+  
+  if (case >= 2) design$intercept <- 1
+  if (case >= 4) design$trend <- 1:n_valid
   
   # Estimate
-  model <- stats::lm(dy ~ design - 1)
+  model_df <- data.frame(dy_val = dy, design)
+  colnames(model_df)[1] <- paste0("d.", y_var)
+  
+  model <- stats::lm(as.formula(paste0("`", colnames(model_df)[1], "` ~ . - 1")), data = model_df)
   coefs <- stats::coef(model)
   vcov_mat <- stats::vcov(model)
   

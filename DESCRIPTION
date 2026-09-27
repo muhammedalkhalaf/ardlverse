@@ -8,9 +8,6 @@ Authors@R: c(
            email = "muhammedalkhalaf@gmail.com", 
            role = c("aut", "cre"),
            comment = c(ORCID = "0009-0002-2677-9246")),
-    person("Merwan", "Roudane", 
-           role = "ctb",
-           comment = "Original Stata implementations"),
     person("Yeleazar", "Levchenko", 
            role = "ctb",
            comment = "Bug fixes and PMG/MG/DFE corrections for panel_ardl in v2.0.0 (KSE)"))

@@ -50,7 +50,7 @@
 #' @examples
 #' \donttest{
 #' # Generate panel data
-#' data <- generate_panel_data(n_groups = 20, n_time = 50)
+#' data <- generate_panel_data(n_groups = 10, n_time = 40)
 #'
 #' # Panel NARDL with PMG estimator
 #' result <- pnardl(
@@ -119,9 +119,13 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
   if (bootstrap) {
     boot_se <- .pnardl_bootstrap(data_decomp, y_var, x_vars_all, id, time,
                                   p, q, estimator, effect, nboot, groups)
+    # The bootstrap covers the error-correction coefficient and the long-run
+    # coefficients only; align the intervals with exactly those estimates.
+    est <- c(ec = unname(result$ec_coef), result$long_run)
+    names(boot_se) <- names(est)
     result$boot_se <- boot_se
-    result$ci_lower <- result$coefficients - 1.96 * boot_se
-    result$ci_upper <- result$coefficients + 1.96 * boot_se
+    result$ci_lower <- est - 1.96 * boot_se
+    result$ci_upper <- est + 1.96 * boot_se
   }
   
   # Asymmetry test
@@ -224,7 +228,7 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
       ec_term <- y - X %*% lr_coefs
       
       # Build ARDL model with EC term
-      max_lag <- max(p, max(q))
+      max_lag <- max(p + 1, max(q))  # p lagged differences of y need p + 1 initial observations
       valid_idx <- (max_lag + 1):n
       
       dy <- diff(y)[(max_lag):(n-1)]
@@ -378,7 +382,7 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
     X <- as.matrix(group_data[, x_vars, drop = FALSE])
     n <- length(y)
     
-    max_lag <- max(p, max(q))
+    max_lag <- max(p + 1, max(q))  # p lagged differences of y need p + 1 initial observations
     valid_idx <- (max_lag + 1):n
     
     dy <- diff(y)[(max_lag):(n-1)]
@@ -455,7 +459,7 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
   n <- length(y)
   k <- ncol(X)
   
-  max_lag <- max(p, max(q))
+  max_lag <- max(p + 1, max(q))  # p lagged differences of y need p + 1 initial observations
   valid_idx <- (max_lag + 1):n
   
   dy <- diff(y)[(max_lag):(n-1)]

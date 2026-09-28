@@ -68,7 +68,7 @@ of dynamic heterogeneous panels. Journal of the American Statistical Association
 \examples{
 \donttest{
 # Generate panel data
-data <- generate_panel_data(n_groups = 20, n_time = 50)
+data <- generate_panel_data(n_groups = 10, n_time = 40)
 
 # Panel NARDL with PMG estimator
 result <- pnardl(
@@ -89,14 +89,15 @@ result_mg <- pnardl(
   estimator = "mg"
 )
 
-# Panel NARDL with bootstrap standard errors
+# Panel NARDL with bootstrap standard errors (nboot kept small here;
+# use several hundred replications in applied work)
 result_boot <- pnardl(
   gdp ~ investment,
   data = data,
   id = "country",
   time = "year",
   bootstrap = TRUE,
-  nboot = 200
+  nboot = 20
 )
 }
 }

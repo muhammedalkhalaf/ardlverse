@@ -174,19 +174,24 @@ mtnardl <- function(formula, data, thresholds = c(0), p = 1, q = 1, case = 3,
   
   # === Bounds Test ===
   n_level_vars <- 1 + k_total
-  beta_h0 <- coefs[1:n_level_vars]
-  V_h0 <- vcov_mat[1:n_level_vars, 1:n_level_vars]
-  
-  F_stat <- as.numeric(t(beta_h0) %*% solve(V_h0) %*% beta_h0 / n_level_vars)
+  idx_h0 <- seq_len(n_level_vars)
+  dn <- colnames(design)
+  if (case == 2) idx_h0 <- c(idx_h0, which(dn == "intercept"))
+  if (case == 4) idx_h0 <- c(idx_h0, which(dn == "trend"))
+  beta_h0 <- coefs[idx_h0]
+  V_h0 <- vcov_mat[idx_h0, idx_h0]
+
+  F_stat <- as.numeric(t(beta_h0) %*% solve(V_h0) %*% beta_h0 / length(idx_h0))
   t_stat <- ec_coef / ec_se
   
   # Critical values (use effective k = original k for PSS)
-  cv <- pss_critical_values(k, case)
+  sr <- ncol(design) - n_level_vars - (case >= 2) - (case >= 4)
+  cv <- pss_critical_values(k, case, n = nrow(design), sr = sr)
   
   # Bootstrap if requested
   boot_results <- NULL
   if (bootstrap) {
-    boot_results <- .mtnardl_bootstrap(dy, design, n_level_vars, nboot)
+    boot_results <- .mtnardl_bootstrap(dy, design, n_level_vars, nboot, idx_h0)
   }
   
   # Bounds test conclusion
@@ -364,10 +369,11 @@ mtnardl <- function(formula, data, thresholds = c(0), p = 1, q = 1, case = 3,
 
 #' @title MT-NARDL Bootstrap
 #' @keywords internal
-.mtnardl_bootstrap <- function(dy, design, n_level, nboot) {
+.mtnardl_bootstrap <- function(dy, design, n_level, nboot, idx_h0 = NULL) {
   n <- length(dy)
   
-  model_null <- stats::lm(dy ~ design[, -(1:n_level)] - 1)
+  idx_h0 <- if (is.null(idx_h0)) seq_len(n_level) else idx_h0
+  model_null <- stats::lm(dy ~ design[, -idx_h0, drop = FALSE] - 1)
   resid_null <- stats::residuals(model_null)
   fitted_null <- stats::fitted(model_null)
   
@@ -382,11 +388,11 @@ mtnardl <- function(formula, data, thresholds = c(0), p = 1, q = 1, case = 3,
     boot_coefs <- stats::coef(boot_model)
     boot_vcov <- stats::vcov(boot_model)
     
-    beta_h0 <- boot_coefs[1:n_level]
-    V_h0 <- boot_vcov[1:n_level, 1:n_level]
+    beta_h0 <- boot_coefs[idx_h0]
+    V_h0 <- boot_vcov[idx_h0, idx_h0]
     
     boot_F[b] <- tryCatch({
-      as.numeric(t(beta_h0) %*% solve(V_h0) %*% beta_h0 / n_level)
+      as.numeric(t(beta_h0) %*% solve(V_h0) %*% beta_h0 / length(idx_h0))
     }, error = function(e) NA)
     
     boot_t[b] <- boot_coefs[1] / sqrt(boot_vcov[1, 1])

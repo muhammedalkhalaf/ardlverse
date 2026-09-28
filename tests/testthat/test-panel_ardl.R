@@ -101,7 +101,7 @@ test_that("hausman_test works", {
     estimator = "mg"
   )
   
-  result <- hausman_test(pmg, mg)
+  result <- hausman_test(mg, pmg)
   
   expect_true(!is.null(result$statistic))
   expect_true(!is.null(result$p.value))

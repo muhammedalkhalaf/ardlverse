@@ -198,15 +198,17 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
   
   # === PSS F-test (joint test on level variables) ===
   # H0: coefficient on y_{t-1} and all x_{t-1} are jointly zero
+  # H0 also restricts the intercept (case 2) or the trend (case 4)
   n_level_vars <- 1 + k
-  R <- diag(n_level_vars)
-  R_full <- matrix(0, n_level_vars, length(coefs))
-  R_full[, 1:n_level_vars] <- R
-  
-  beta_h0 <- coefs[1:n_level_vars]
-  V_h0 <- vcov_mat[1:n_level_vars, 1:n_level_vars]
-  
-  F_pss <- as.numeric(t(beta_h0) %*% solve(V_h0) %*% beta_h0 / n_level_vars)
+  idx_h0 <- seq_len(n_level_vars)
+  dn <- colnames(design)
+  if (case == 2) idx_h0 <- c(idx_h0, which(dn == "intercept"))
+  if (case == 4) idx_h0 <- c(idx_h0, which(dn == "trend"))
+
+  beta_h0 <- coefs[idx_h0]
+  V_h0 <- vcov_mat[idx_h0, idx_h0]
+
+  F_pss <- as.numeric(t(beta_h0) %*% solve(V_h0) %*% beta_h0 / length(idx_h0))
   
   # === Deferred t-test (t_dep) ===
   # Test significance of lagged dependent variable alone
@@ -223,12 +225,15 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
   }
   
   # === Get Critical Values ===
-  cv <- .aardl_critical_values(k, case, n_valid)
+  # Short-run coefficients: regressors other than the deterministic terms
+  # and the k + 1 lagged levels (Fourier terms included)
+  sr <- ncol(design) - n_level_vars - (case >= 2) - (case >= 4)
+  cv <- .aardl_critical_values(k, case, n_valid, sr)
   
   # === Bootstrap inference if requested ===
   boot_results <- NULL
   if (use_bootstrap) {
-    boot_results <- .aardl_bootstrap(dy, design, n_level_vars, k, nboot)
+    boot_results <- .aardl_bootstrap(dy, design, n_level_vars, k, nboot, idx_h0)
   }
   
   # === Make Conclusion ===
@@ -337,34 +342,31 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
 
 
 #' @title AARDL Critical Values
+#' @description Bounds for the overall F and the t test from the response
+#'   surfaces of Kripfganz and Schneider (2020). The F test on the lagged
+#'   regressors has no tabulated bounds; Sam, McNown and Goh (2019) use
+#'   bootstrap critical values for it.
 #' @keywords internal
-.aardl_critical_values <- function(k, case, n) {
-  # Critical values from Sam, McNown & Goh (2019)
-  # Returns I(0) and I(1) bounds for F and t statistics
-  
-  # Simplified critical values (asymptotic, case III)
-  # In production, should use full tables
-  cv_F <- list(
-    I0 = c(`90%` = 2.63, `95%` = 3.10, `99%` = 4.13),
-    I1 = c(`90%` = 3.35 + 0.22*k, `95%` = 3.87 + 0.25*k, `99%` = 4.96 + 0.30*k)
+.aardl_critical_values <- function(k, case, n, sr = 0) {
+  lv <- c(10, 5, 1)
+  Fb <- .ks_bounds("F", case, k, n, sr, siglevels = lv)$cv
+  tb <- .ks_bounds("t", case, k, n, sr, siglevels = lv)$cv
+  nm <- c("90%", "95%", "99%")
+  list(
+    F = list(I0 = stats::setNames(Fb["I0", ], nm), I1 = stats::setNames(Fb["I1", ], nm)),
+    t = list(I0 = stats::setNames(tb["I0", ], nm), I1 = stats::setNames(tb["I1", ], nm))
   )
-  
-  cv_t <- list(
-    I0 = c(`90%` = -2.57, `95%` = -2.86, `99%` = -3.43),
-    I1 = c(`90%` = -2.91 - 0.10*k, `95%` = -3.22 - 0.12*k, `99%` = -3.82 - 0.14*k)
-  )
-  
-  list(F = cv_F, t = cv_t)
 }
 
 
 #' @title AARDL Bootstrap Procedure
 #' @keywords internal
-.aardl_bootstrap <- function(dy, design, n_level, k, nboot) {
+.aardl_bootstrap <- function(dy, design, n_level, k, nboot, idx_h0 = NULL) {
   n <- length(dy)
   
   # Estimate null model (no cointegration)
-  model_null <- stats::lm(dy ~ design[, -(1:n_level)] - 1)
+  idx_h0 <- if (is.null(idx_h0)) seq_len(n_level) else idx_h0
+  model_null <- stats::lm(dy ~ design[, -idx_h0, drop = FALSE] - 1)
   resid_null <- stats::residuals(model_null)
   fitted_null <- stats::fitted(model_null)
   
@@ -383,10 +385,10 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
     boot_vcov <- stats::vcov(boot_model)
     
     # F-statistic
-    beta_h0 <- boot_coefs[1:n_level]
-    V_h0 <- boot_vcov[1:n_level, 1:n_level]
+    beta_h0 <- boot_coefs[idx_h0]
+    V_h0 <- boot_vcov[idx_h0, idx_h0]
     boot_F[b] <- tryCatch({
-      as.numeric(t(beta_h0) %*% solve(V_h0) %*% beta_h0 / n_level)
+      as.numeric(t(beta_h0) %*% solve(V_h0) %*% beta_h0 / length(idx_h0))
     }, error = function(e) NA)
     
     # t-statistic
@@ -457,8 +459,11 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
   t_lower <- cv$t$I0["95%"]
   t_upper <- cv$t$I1["95%"]
   
-  # PSS bounds test decision
-  if (F_pss > F_upper && t_dep < t_upper) {
+  # PSS bounds test decision (bounds from Kripfganz and Schneider, 2020)
+  if (any(is.na(c(F_lower, F_upper, t_lower, t_upper, F_pss, t_dep)))) {
+    conclusion <- "Bounds unavailable (too few degrees of freedom); use the bootstrap"
+    decision <- "INCONCLUSIVE"
+  } else if (F_pss > F_upper && t_dep < t_upper) {
     conclusion <- "Cointegration confirmed: F > I(1) bound and t < I(1) bound"
     decision <- "COINTEGRATION"
   } else if (F_pss < F_lower || t_dep > t_lower) {
@@ -473,7 +478,7 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
     decision = decision,
     message = conclusion,
     bounds = list(F = c(F_lower, F_upper), t = c(t_lower, t_upper)),
-    method = "asymptotic"
+    method = "Kripfganz-Schneider bounds"
   )
 }
 
@@ -561,7 +566,7 @@ summary.aardl <- function(object, ...) {
     cat(sprintf("  %-25s %10.4f\n", "F_ind (indep. variables):", object$F_ind))
   }
   
-  cat("\nCritical Values (95%):\n")
+  cat("\nCritical Values (5% level):\n")
   cat("-----------------------------------------------\n")
   if (object$conclusion$method == "bootstrap") {
     cat("  Bootstrap critical values used\n")

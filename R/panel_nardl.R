@@ -299,6 +299,7 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
     ec_coef = mean(ec_coefs),
     ec_by_unit = ec_coefs,
     se_lr = se_lr,
+    vcov_lr = vcov_lr,
     convergence = list(iterations = iter, converged = iter < max_iter),
     unit_results = sr_results
   )
@@ -338,6 +339,11 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
   # Average coefficients
   lr_avg <- colMeans(all_lr, na.rm = TRUE)
   lr_se <- apply(all_lr, 2, function(x) stats::sd(x, na.rm = TRUE) / sqrt(sum(!is.na(x))))
+  # Covariance of the mean group long-run estimator (Pesaran and Smith,
+  # 1995): sample covariance of the unit estimates divided by N
+  ok <- stats::complete.cases(all_lr)
+  lr_vcov <- if (sum(ok) > 1) stats::cov(all_lr[ok, , drop = FALSE]) / sum(ok) else
+    matrix(NA_real_, k_total, k_total)
   
   ec_avg <- mean(all_ec, na.rm = TRUE)
   ec_se <- stats::sd(all_ec, na.rm = TRUE) / sqrt(sum(!is.na(all_ec)))
@@ -353,6 +359,7 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
     ec_coef = ec_avg,
     ec_se = ec_se,
     se_lr = lr_se,
+    vcov_lr = lr_vcov,
     unit_results = unit_results,
     unit_lr = all_lr,
     unit_ec = all_ec
@@ -434,6 +441,10 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
   } else {
     rep(NA, k_total)
   }
+  # Delta-method covariance of theta = -beta / phi
+  idx <- seq_len(1 + k_total)
+  G <- cbind(coefs[2:(1 + k_total)] / ec_coef^2, diag(-1 / ec_coef, k_total))
+  vcov_lr <- G %*% vcov_mat[idx, idx] %*% t(G)
   
   lr_pos <- lr_coefs[1:k]
   lr_neg <- lr_coefs[(k+1):(2*k)]
@@ -445,6 +456,8 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
     long_run_neg = lr_neg,
     ec_coef = ec_coef,
     se = se,
+    se_lr = sqrt(diag(vcov_lr)),
+    vcov_lr = vcov_lr,
     model = model,
     vcov = vcov_mat
   )
@@ -564,10 +577,12 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
   for (i in 1:k) {
     diff_lr <- lr_pos[i] - lr_neg[i]
     
-    # Approximate Wald test
-    if (!is.null(result$se_lr) && length(result$se_lr) >= 2*k) {
-      se_diff <- sqrt(result$se_lr[i]^2 + result$se_lr[k + i]^2)
-      wald <- (diff_lr / se_diff)^2
+    # Wald test with the covariance between the positive and negative
+    # long-run coefficients
+    V <- result$vcov_lr
+    if (!is.null(V) && nrow(V) >= 2*k && all(is.finite(V[c(i, k + i), c(i, k + i)]))) {
+      var_diff <- V[i, i] + V[k + i, k + i] - 2 * V[i, k + i]
+      wald <- as.numeric(diff_lr^2 / var_diff)
       p_value <- 1 - stats::pchisq(wald, 1)
     } else {
       wald <- NA
@@ -597,18 +612,25 @@ pnardl <- function(formula, data, id, time, p = 1, q = 1,
   
   diff_coef <- lr_pmg - lr_mg
   
-  # Approximate variance of difference
-  var_mg <- if (!is.null(mg_result$se_lr)) mg_result$se_lr^2 else rep(0.01, length(lr_mg))
-  var_pmg <- if (!is.null(pmg_result$se_lr)) pmg_result$se_lr^2 else rep(0.01, length(lr_pmg))
-  
-  var_diff <- var_mg - var_pmg
-  var_diff[var_diff <= 0] <- 0.001  # Avoid negative variance
-  
-  # Hausman statistic
-  H <- sum(diff_coef^2 / var_diff)
-  df <- length(diff_coef)
+  # Hausman (1978) statistic d' (V_MG - V_PMG)^- d with a generalised
+  # inverse over the positive eigenvalues; degrees of freedom = rank
+  V_mg <- mg_result$vcov_lr
+  V_pmg <- pmg_result$vcov_lr
+  na_out <- list(statistic = NA_real_, df = NA_integer_, p_value = NA_real_,
+                 conclusion = "Not computed: covariance difference unavailable or not positive")
+  if (is.null(V_mg) || is.null(V_pmg) || any(!is.finite(V_mg)) ||
+      any(!is.finite(V_pmg)) || any(!is.finite(diff_coef))) return(na_out)
+  Vd <- V_mg - V_pmg
+  Vd <- (Vd + t(Vd)) / 2
+  e <- eigen(Vd, symmetric = TRUE)
+  keep <- e$values > max(abs(e$values)) * 1e-10
+  if (!any(keep)) return(na_out)
+  Vinv <- e$vectors[, keep, drop = FALSE] %*%
+    diag(1 / e$values[keep], sum(keep)) %*% t(e$vectors[, keep, drop = FALSE])
+  H <- as.numeric(t(diff_coef) %*% Vinv %*% diff_coef)
+  df <- sum(keep)
   p_value <- 1 - stats::pchisq(H, df)
-  
+
   list(
     statistic = H,
     df = df,

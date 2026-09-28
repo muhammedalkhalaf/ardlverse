@@ -4,7 +4,7 @@
 \alias{.aardl_bootstrap}
 \title{AARDL Bootstrap Procedure}
 \usage{
-.aardl_bootstrap(dy, design, n_level, k, nboot)
+.aardl_bootstrap(dy, design, n_level, k, nboot, idx_h0 = NULL)
 }
 \description{
 AARDL Bootstrap Procedure

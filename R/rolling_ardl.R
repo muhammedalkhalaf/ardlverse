@@ -114,8 +114,10 @@ rardl <- function(formula, data, method = c("rolling", "recursive"),
   colnames(lr_coefs) <- x_vars
   coint_decisions <- character(n_windows)
   
-  # Get critical values
-  cv <- pss_critical_values(k, case)
+  # Critical values: Kripfganz and Schneider (2020) finite-sample bounds,
+  # recomputed for each window's sample size; 'cv' keeps those of the
+  # first successfully estimated window for printing and plotting.
+  cv <- NULL
   
   # Run estimation for each window
   for (w in 1:n_windows) {
@@ -136,9 +138,13 @@ rardl <- function(formula, data, method = c("rolling", "recursive"),
       lr_coefs[w, ] <- result$lr_coefs
       
       # Make cointegration decision
-      if (F_stats[w] > cv$F_bounds$I1) {
+      cv_w <- pss_critical_values(k, case, n = result$nobs, sr = result$sr)
+      if (is.null(cv)) cv <- cv_w
+      if (is.na(cv_w$F_bounds$I1)) {
+        coint_decisions[w] <- NA_character_
+      } else if (F_stats[w] > cv_w$F_bounds$I1) {
         coint_decisions[w] <- "COINT"
-      } else if (F_stats[w] < cv$F_bounds$I0) {
+      } else if (F_stats[w] < cv_w$F_bounds$I0) {
         coint_decisions[w] <- "NO_COINT"
       } else {
         coint_decisions[w] <- "INCONC"
@@ -263,10 +269,14 @@ rardl <- function(formula, data, method = c("rolling", "recursive"),
   ec_se <- sqrt(vcov_mat[1, 1])
   
   n_level <- 1 + k
-  beta_h0 <- coefs[1:n_level]
-  V_h0 <- vcov_mat[1:n_level, 1:n_level]
-  
-  F_stat <- as.numeric(t(beta_h0) %*% solve(V_h0) %*% beta_h0 / n_level)
+  idx_h0 <- seq_len(n_level)
+  dn <- colnames(design)
+  if (case == 2) idx_h0 <- c(idx_h0, which(dn == "intercept"))
+  if (case == 4) idx_h0 <- c(idx_h0, which(dn == "trend"))
+  beta_h0 <- coefs[idx_h0]
+  V_h0 <- vcov_mat[idx_h0, idx_h0]
+
+  F_stat <- as.numeric(t(beta_h0) %*% solve(V_h0) %*% beta_h0 / length(idx_h0))
   t_stat <- ec_coef / ec_se
   
   # Long-run coefficients
@@ -281,7 +291,9 @@ rardl <- function(formula, data, method = c("rolling", "recursive"),
     t_stat = t_stat,
     ec_coef = ec_coef,
     ec_se = ec_se,
-    lr_coefs = lr_coefs
+    lr_coefs = lr_coefs,
+    nobs = nrow(design),
+    sr = ncol(design) - n_level - (case >= 2) - (case >= 4)
   )
 }
 

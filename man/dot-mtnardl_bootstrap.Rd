@@ -4,7 +4,7 @@
 \alias{.mtnardl_bootstrap}
 \title{MT-NARDL Bootstrap}
 \usage{
-.mtnardl_bootstrap(dy, design, n_level, nboot)
+.mtnardl_bootstrap(dy, design, n_level, nboot, idx_h0 = NULL)
 }
 \description{
 MT-NARDL Bootstrap

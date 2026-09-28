@@ -149,7 +149,8 @@ fourier_ardl <- function(formula, data, p = 1, q = 1, k = 1, case = 3,
   y_col <- "dy"
   x_cols <- setdiff(names(model_data), "dy")
   
-  formula_str <- paste(y_col, "~", paste(x_cols, collapse = " + "))
+  # Deterministic terms are explicit columns; no implicit lm() intercept
+  formula_str <- paste(y_col, "~", paste(x_cols, collapse = " + "), "- 1")
   model <- lm(as.formula(formula_str), data = model_data)
   
   coefs <- coef(model)
@@ -176,19 +177,22 @@ fourier_ardl <- function(formula, data, p = 1, q = 1, k = 1, case = 3,
   # F-test for joint significance of level variables
   RSS_ur <- sum(residuals(model)^2)
   
-  # Restricted model (no levels)
-  x_cols_r <- x_cols[!x_cols %in% c("y_lag1", x_vars)]
+  # Restricted model: no level terms; H0 also restricts the intercept
+  # (case 2) or the trend (case 4), as in Pesaran, Shin and Smith (2001)
+  h0_cols <- c("y_lag1", x_vars,
+               if (case == 2) "const", if (case == 4) "trend")
+  x_cols_r <- x_cols[!x_cols %in% h0_cols]
   if (length(x_cols_r) > 0) {
-    formula_r <- paste(y_col, "~", paste(x_cols_r, collapse = " + "))
+    formula_r <- paste(y_col, "~", paste(x_cols_r, collapse = " + "), "- 1")
     model_r <- lm(as.formula(formula_r), data = model_data)
     RSS_r <- sum(residuals(model_r)^2)
   } else {
-    RSS_r <- sum((model_data$dy - mean(model_data$dy))^2)
+    RSS_r <- sum(model_data$dy^2)
   }
-  
-  m <- length(x_vars) + 1  # Number of restrictions
+
+  m <- length(h0_cols)  # Number of restrictions
   n_obs <- nrow(model_data)
-  k_ur <- length(coefs)
+  k_ur <- sum(!is.na(coefs))
   
   F_stat <- ((RSS_r - RSS_ur) / m) / (RSS_ur / (n_obs - k_ur))
   
@@ -293,7 +297,7 @@ fourier_ardl <- function(formula, data, p = 1, q = 1, k = 1, case = 3,
   }
   
   # Deterministic terms
-  if (case >= 3) {
+  if (case >= 2) {
     result$const <- 1
   }
   if (case >= 4) {
@@ -353,59 +357,62 @@ fourier_ardl <- function(formula, data, p = 1, q = 1, k = 1, case = 3,
 
 
 #' @title Fourier ARDL Bounds Test
-#' @description Perform bounds test with Fourier critical values
+#' @description Reports the bounds test statistics of a Fourier ARDL model.
+#'
+#' @details No critical values for the PSS bounds F test with Fourier terms
+#'   have been tabulated in the literature cited by this package, and the
+#'   Fourier terms change the null distribution. The function therefore
+#'   returns no decision. For reference only, it also reports the Pesaran,
+#'   Shin and Smith (2001) bounds for the model without Fourier terms, from
+#'   the response surfaces of Kripfganz and Schneider (2020); these are not
+#'   valid for the Fourier model. Use a bootstrap for inference.
 #'
 #' @param object A fourier_ardl object
 #'
-#' @return Bounds test results with appropriate critical values
+#' @return Invisibly, a list with \code{F_stat}, \code{t_stat},
+#'   \code{cv_F = NA} and \code{cv_pss_reference}.
+#'
+#' @references
+#' Kripfganz, S. and Schneider, D. C. (2020). Response surface regressions
+#' for critical value bounds and approximate p-values in equilibrium
+#' correction models. \emph{Oxford Bulletin of Economics and Statistics},
+#' 82(6), 1456-1481. \doi{10.1111/obes.12377}
 #' @export
 fourier_bounds_test <- function(object) {
-  
+
   if (!inherits(object, "fourier_ardl")) {
     stop("Object must be of class 'fourier_ardl'")
   }
-  
+
   F_stat <- object$bounds_test$F_stat
   t_stat <- object$bounds_test$t_stat
   k <- length(object$x_vars)
   n_freq <- object$k
-  
-  # Critical values for Fourier ARDL (approximate)
-  # Based on Banerjee et al. (2017) and simulation studies
-  cv_F <- list(
-    "10%" = list(I0 = 2.5 + 0.1 * n_freq, I1 = 3.5 + 0.15 * n_freq),
-    "5%" = list(I0 = 3.0 + 0.1 * n_freq, I1 = 4.0 + 0.15 * n_freq),
-    "1%" = list(I0 = 4.0 + 0.1 * n_freq, I1 = 5.0 + 0.15 * n_freq)
-  )
-  
+
+  ref <- .ks_bounds("F", object$case, k, siglevels = c(10, 5, 1))$cv
+
   cat("\n")
   cat("============================================================\n")
   cat("     Fourier ARDL Bounds Test for Cointegration\n")
   cat("============================================================\n\n")
-  
+
   cat("Number of Fourier frequencies (k):", n_freq, "\n")
   cat("Number of regressors:", k, "\n\n")
-  
+
   cat("Test Statistics:\n")
   cat("  F-statistic:", round(F_stat, 4), "\n")
   cat("  t-statistic:", round(t_stat, 4), "\n\n")
-  
-  cat("Critical Values (5% level):\n")
-  cat("  F: I(0) =", round(cv_F[["5%"]]$I0, 2), 
-      ", I(1) =", round(cv_F[["5%"]]$I1, 2), "\n\n")
-  
-  # Conclusion
-  if (F_stat > cv_F[["5%"]]$I1) {
-    cat("Conclusion: COINTEGRATION - F above upper bound\n")
-  } else if (F_stat < cv_F[["5%"]]$I0) {
-    cat("Conclusion: NO COINTEGRATION - F below lower bound\n")
-  } else {
-    cat("Conclusion: INCONCLUSIVE - F between bounds\n")
-  }
-  
+
+  cat("Critical values: not available for the Fourier ARDL bounds test.\n")
+  cat("Reference only (PSS bounds without Fourier terms, asymptotic,\n")
+  cat("Kripfganz and Schneider 2020), 5% level:\n")
+  cat("  F: I(0) =", round(ref["I0", "5%"], 3),
+      ", I(1) =", round(ref["I1", "5%"], 3), "\n\n")
+  cat("No decision is reported; use a bootstrap for inference.\n")
   cat("============================================================\n")
-  
-  invisible(list(F_stat = F_stat, t_stat = t_stat, cv_F = cv_F))
+
+  invisible(list(F_stat = F_stat, t_stat = t_stat, cv_F = NA_real_,
+                 cv_pss_reference = ref))
 }
 
 

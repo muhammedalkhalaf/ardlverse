@@ -246,12 +246,14 @@ ardl_diagnostics <- function(model, lags = 4, arch_lags = 4) {
   n <- length(resid)
   sigma <- sd(resid)
   
-  # Cumulative sum of standardized residuals
+  # Cumulative sum of standardized OLS residuals
   cusum <- cumsum(resid) / sigma
-  
-  # Critical bounds (5% level)
-  # Approximate: +/- 0.948 * sqrt(n)
-  bound <- 0.948 * sqrt(n) * (1:n) / n
+
+  # CUSUM test with OLS residuals (Ploberger and Kraemer, 1992,
+  # Econometrica 60(2), 271-285, doi:10.2307/2951597): cusum / sqrt(n)
+  # converges to a Brownian bridge when the model has an intercept, and the
+  # 5% critical value of sup |B(r)| is 1.358, a constant boundary.
+  bound <- rep(1.358 * sqrt(n), n)
   
   # Check if CUSUM crosses bounds
   crosses <- any(abs(cusum) > bound)
@@ -279,9 +281,13 @@ ardl_diagnostics <- function(model, lags = 4, arch_lags = 4) {
   # Expected value under null: t/n
   expected <- (1:n) / n
   
-  # Critical bounds (5% level, approximate)
-  # Based on Brownian bridge
-  bound <- 1.358 / sqrt(n)
+  # 5% bounds from the Brownian bridge limit of sqrt(n) (cusumsq - t/n),
+  # scaled by sqrt(Var(e^2)) / sigma^2 (Deng and Perron, 2008, Econometric
+  # Theory 24(3), 809-822, doi:10.1017/S026646660808033X); under normality
+  # the scale is sqrt(2).
+  s2 <- mean(resid_sq)
+  scale <- sqrt(mean((resid_sq - s2)^2)) / s2
+  bound <- 1.358 * scale / sqrt(n)
   
   upper <- expected + bound
   lower <- expected - bound

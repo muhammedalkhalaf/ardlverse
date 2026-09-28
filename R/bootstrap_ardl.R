@@ -219,7 +219,9 @@ boot_ardl <- function(formula, data, p = 1, q = 1, case = 3,
   
   # Add deterministics based on case
   n_obs <- nrow(result)
-  if (case >= 3) {
+  # Case 2 has a restricted intercept, case 3 an unrestricted one; both
+  # need the constant in the model (it is restricted under H0 in case 2)
+  if (case >= 2) {
     result$const <- 1
   }
   if (case >= 4) {
@@ -228,6 +230,7 @@ boot_ardl <- function(formula, data, p = 1, q = 1, case = 3,
   
   # Remove NAs
   result <- na.omit(result)
+  attr(result, "level_vars") <- c("y_lag1", names(result)[2 + seq_along(x_vars)])
   
   return(result)
 }
@@ -240,11 +243,8 @@ boot_ardl <- function(formula, data, p = 1, q = 1, case = 3,
   # All variables except dy
   xvars <- names(ardl_data)[-1]
   
-  formula_str <- paste("dy ~", paste(xvars, collapse = " + "))
-  
-  if (case == 1) {
-    formula_str <- paste(formula_str, "- 1")
-  }
+  # The constant is an explicit column (cases 2-5), so lm() adds none
+  formula_str <- paste("dy ~", paste(xvars, collapse = " + "), "- 1")
   
   model <- lm(as.formula(formula_str), data = ardl_data)
   
@@ -255,29 +255,19 @@ boot_ardl <- function(formula, data, p = 1, q = 1, case = 3,
 #' @title Estimate Restricted ARDL Model
 #' @keywords internal
 .estimate_ardl_restricted <- function(ardl_data, case) {
-  
-  # Remove level variables (y_lag1 and X in levels)
+
+  # Under H0 the lagged levels are zero, together with the intercept
+  # (case 2) or the trend (case 4)
   xvars <- names(ardl_data)[-1]
-  
-  # Identify level variables to exclude
-  level_vars <- grep("^y_lag1$|^[A-Za-z]", xvars, value = TRUE)
-  level_vars <- level_vars[!grepl("^d|^const$|^trend$|_L[0-9]", level_vars)]
-  level_vars <- c("y_lag1", level_vars)
-  
-  # Keep only differenced variables and deterministics
-  keep_vars <- setdiff(xvars, level_vars)
-  
+  level_vars <- attr(ardl_data, "level_vars")
+  drop <- c(level_vars, if (case == 2) "const", if (case == 4) "trend")
+  keep_vars <- setdiff(xvars, drop)
   if (length(keep_vars) == 0) {
-    # At minimum, keep differences
-    keep_vars <- grep("^d", xvars, value = TRUE)
+    return(lm(dy ~ 0, data = ardl_data))
   }
-  
-  formula_str <- paste("dy ~", paste(keep_vars, collapse = " + "))
-  
-  if (case == 1) {
-    formula_str <- paste(formula_str, "- 1")
-  }
-  
+
+  # The constant is an explicit column, so lm() adds none
+  formula_str <- paste("dy ~", paste(keep_vars, collapse = " + "), "- 1")
   model <- lm(as.formula(formula_str), data = ardl_data)
   
   return(model)
@@ -294,8 +284,9 @@ boot_ardl <- function(formula, data, p = 1, q = 1, case = 3,
   n <- length(residuals(model_ur))
   k_ur <- length(coef(model_ur))
   
-  # Number of restrictions = k + 1 (x levels + y_lag1)
-  m <- k + 1
+  # Number of restrictions: the k + 1 lagged levels, plus the intercept
+  # (case 2) or the trend (case 4)
+  m <- k + 1 + (case %in% c(2, 4))
   
   F_stat <- ((RSS_r - RSS_ur) / m) / (RSS_ur / (n - k_ur))
   
@@ -334,24 +325,19 @@ boot_ardl <- function(formula, data, p = 1, q = 1, case = 3,
 #' @keywords internal
 .bootstrap_bounds <- function(ardl_data, model_ur, case, k, nboot, parallel, ncores) {
   
-  # Get residuals and fitted values under null
-  resid_ur <- residuals(model_ur)
-  n <- length(resid_ur)
-  
-  # Center residuals
-  resid_centered <- resid_ur - mean(resid_ur)
-  
-  # Bootstrap function
+  # Fixed-regressor residual bootstrap under the null: the restricted model
+  # (no lagged levels) generates the bootstrap samples
+  model_r <- .estimate_ardl_restricted(ardl_data, case)
+  resid_r <- residuals(model_r)
+  fitted_r <- fitted(model_r)
+  n <- length(resid_r)
+  resid_centered <- resid_r - mean(resid_r)
+
   boot_one <- function(b) {
-    
-    # Resample residuals
     boot_resid <- sample(resid_centered, n, replace = TRUE)
-    
-    # Generate bootstrap dy under null (no cointegration)
-    # Simple approach: use restricted model structure
     ardl_boot <- ardl_data
-    ardl_boot$dy <- fitted(model_ur) - resid_ur + boot_resid
-    
+    ardl_boot$dy <- fitted_r + boot_resid
+
     # Re-estimate models
     tryCatch({
       model_ur_boot <- .estimate_ardl_unrestricted(ardl_boot, case)
@@ -405,53 +391,59 @@ boot_ardl <- function(formula, data, p = 1, q = 1, case = 3,
 }
 
 
-#' @title PSS Asymptotic Critical Values
-#' @description Get Pesaran, Shin & Smith (2001) asymptotic critical values
+#' @title Critical Value Bounds for the PSS Bounds Test
+#' @description Critical value bounds for the F and t statistics of the
+#'   Pesaran, Shin and Smith (2001) bounds test, computed from the response
+#'   surface regressions of Kripfganz and Schneider (2020). With \code{n}
+#'   missing the asymptotic bounds are returned; with \code{n} (and
+#'   \code{sr}) the finite-sample bounds.
 #'
-#' @param k Number of regressors (excluding the lagged dependent variable)
-#' @param case Deterministic specification (1-5)
-#' @param level Significance level: "10%", "5%", or "1%"
+#' @param k Number of regressors in levels (excluding the lagged dependent
+#'   variable)
+#' @param case PSS case (1-5)
+#' @param level Significance level: \code{"10\%"}, \code{"5\%"},
+#'   \code{"2.5\%"} or \code{"1\%"}
+#' @param n Number of observations (optional)
+#' @param sr Number of short-run coefficients (regressors other than the
+#'   deterministic terms and the lagged levels); used with \code{n}
 #'
-#' @return A list with I(0) and I(1) bounds for F and t statistics
+#' @return A list with \code{F_bounds} and \code{t_bounds} (each a list with
+#'   \code{I0} and \code{I1}), \code{k}, \code{case} and \code{level}. The
+#'   t statistic is not tabulated for cases 2 and 4; the values of cases 3
+#'   and 5 are used, as in Kripfganz and Schneider (2020).
 #'
 #' @references
-#' Pesaran, M. H., Shin, Y., & Smith, R. J. (2001). Bounds testing approaches
-#' to the analysis of level relationships. Journal of Applied Econometrics.
+#' Pesaran, M. H., Shin, Y. and Smith, R. J. (2001). Bounds testing
+#' approaches to the analysis of level relationships. \emph{Journal of
+#' Applied Econometrics}, 16(3), 289-326. \doi{10.1002/jae.616}
+#'
+#' Kripfganz, S. and Schneider, D. C. (2020). Response surface regressions
+#' for critical value bounds and approximate p-values in equilibrium
+#' correction models. \emph{Oxford Bulletin of Economics and Statistics},
+#' 82(6), 1456-1481. \doi{10.1111/obes.12377}
+#'
+#' @examples
+#' pss_critical_values(k = 2, case = 3)
+#' pss_critical_values(k = 2, case = 3, n = 80, sr = 4)
 #'
 #' @export
-pss_critical_values <- function(k, case = 3, level = "5%") {
-  
-  # Table CI(iii): Unrestricted intercept, no trend (Case 3)
-  # F-statistic bounds
-  cv_F <- list(
-    "10%" = list(
-      I0 = c(2.37, 2.45, 2.52, 2.56, 2.62, 2.66, 2.69)[min(k, 7)],
-      I1 = c(3.20, 3.52, 3.83, 4.10, 4.35, 4.60, 4.80)[min(k, 7)]
-    ),
-    "5%" = list(
-      I0 = c(2.79, 2.87, 2.94, 3.02, 3.07, 3.12, 3.15)[min(k, 7)],
-      I1 = c(3.67, 4.00, 4.35, 4.66, 4.90, 5.15, 5.35)[min(k, 7)]
-    ),
-    "1%" = list(
-      I0 = c(3.65, 3.74, 3.88, 4.00, 4.10, 4.18, 4.26)[min(k, 7)],
-      I1 = c(4.66, 5.06, 5.44, 5.80, 6.10, 6.36, 6.58)[min(k, 7)]
-    )
-  )
-  
-  # t-statistic bounds (Case 3)
-  cv_t <- list(
-    "10%" = list(I0 = -2.57, I1 = -3.21),
-    "5%" = list(I0 = -2.86, I1 = -3.53),
-    "1%" = list(I0 = -3.43, I1 = -4.10)
-  )
-  
+pss_critical_values <- function(k, case = 3, level = "5%", n = NULL, sr = 0) {
+  lev <- as.numeric(sub("%", "", level))
+  Fb <- .ks_bounds("F", case, k, n, sr, siglevels = lev)
+  tb <- .ks_bounds("t", case, k, n, sr, siglevels = lev)
   list(
-    F_bounds = cv_F[[level]],
-    t_bounds = cv_t[[level]],
-    k = k,
-    case = case,
-    level = level
+    F_bounds = list(I0 = unname(Fb$cv["I0", 1]), I1 = unname(Fb$cv["I1", 1])),
+    t_bounds = list(I0 = unname(tb$cv["I0", 1]), I1 = unname(tb$cv["I1", 1])),
+    k = k, case = case, level = level
   )
+}
+
+
+#' @title PSS bounds test p-values (Kripfganz and Schneider, 2020)
+#' @keywords internal
+.pss_pvalues <- function(F_stat, t_stat, k, case, n = NULL, sr = 0) {
+  list(F = .ks_bounds("F", case, k, n, sr, value = F_stat)$pvalue,
+       t = .ks_bounds("t", case, k, n, sr, value = t_stat)$pvalue)
 }
 
 
@@ -503,7 +495,7 @@ summary.boot_ardl <- function(object, ...) {
   # PSS asymptotic bounds for comparison
   pss <- pss_critical_values(object$k, object$case, "5%")
   cat("--------------------------------------------------------------------\n")
-  cat("     PSS (2001) Asymptotic Critical Values (5% level)\n")
+  cat("  PSS bounds, asymptotic, Kripfganz and Schneider (2020), 5% level\n")
   cat("--------------------------------------------------------------------\n")
   cat("F-bounds: I(0) =", round(pss$F_bounds$I0, 2), 
       ", I(1) =", round(pss$F_bounds$I1, 2), "\n")

@@ -4,9 +4,12 @@
 \alias{.aardl_critical_values}
 \title{AARDL Critical Values}
 \usage{
-.aardl_critical_values(k, case, n)
+.aardl_critical_values(k, case, n, sr = 0)
 }
 \description{
-AARDL Critical Values
+Bounds for the overall F and the t test from the response
+  surfaces of Kripfganz and Schneider (2020). The F test on the lagged
+  regressors has no tabulated bounds; Sam, McNown and Goh (2019) use
+  bootstrap critical values for it.
 }
 \keyword{internal}

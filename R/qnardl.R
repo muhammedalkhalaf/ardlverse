@@ -175,6 +175,10 @@ qnardl <- function(formula, data, tau = c(0.25, 0.5, 0.75),
   dy <- diff(y)
   y_lag1 <- y[-length(y)]
   
+  # Lag of a series defined on the differenced sample, aligned with the
+  # estimation rows (the first differenced observation is dropped below)
+  lagv <- function(v, lag) c(rep(NA, lag), v[seq_len(length(v) - lag)])[-1]
+
   # Initialize result data frame
   result_df <- data.frame(
     dy = dy[-1],
@@ -200,9 +204,9 @@ qnardl <- function(formula, data, tau = c(0.25, 0.5, 0.75),
       x_pos <- cumsum(dx_pos)
       x_neg <- cumsum(dx_neg)
       
-      # Levels (lagged)
-      result_df[[paste0(v, "_pos")]] <- x_pos[-1]
-      result_df[[paste0(v, "_neg")]] <- x_neg[-1]
+      # Levels (lagged one period, as y_lag1)
+      result_df[[paste0(v, "_pos")]] <- x_pos[-length(x_pos)]
+      result_df[[paste0(v, "_neg")]] <- x_neg[-length(x_neg)]
       
       pos_vars <- c(pos_vars, paste0(v, "_pos"))
       neg_vars <- c(neg_vars, paste0(v, "_neg"))
@@ -214,8 +218,8 @@ qnardl <- function(formula, data, tau = c(0.25, 0.5, 0.75),
       # Lagged differences
       if (q[j] > 0) {
         for (lag in 1:q[j]) {
-          result_df[[paste0("d_", v, "_pos_L", lag)]] <- c(rep(NA, lag), dx_pos[1:(length(dx_pos) - lag - 1)])
-          result_df[[paste0("d_", v, "_neg_L", lag)]] <- c(rep(NA, lag), dx_neg[1:(length(dx_neg) - lag - 1)])
+          result_df[[paste0("d_", v, "_pos_L", lag)]] <- lagv(dx_pos, lag)
+          result_df[[paste0("d_", v, "_neg_L", lag)]] <- lagv(dx_neg, lag)
         }
       }
       
@@ -226,7 +230,7 @@ qnardl <- function(formula, data, tau = c(0.25, 0.5, 0.75),
       
       if (q[j] > 0) {
         for (lag in 1:q[j]) {
-          result_df[[paste0("d_", v, "_L", lag)]] <- c(rep(NA, lag), dx[1:(length(dx) - lag - 1)])
+          result_df[[paste0("d_", v, "_L", lag)]] <- lagv(dx, lag)
         }
       }
     }
@@ -235,7 +239,7 @@ qnardl <- function(formula, data, tau = c(0.25, 0.5, 0.75),
   # Lagged dy
   if (p > 1) {
     for (lag in 1:(p-1)) {
-      result_df[[paste0("dy_L", lag)]] <- c(rep(NA, lag), dy[1:(length(dy) - lag - 1)])
+      result_df[[paste0("dy_L", lag)]] <- lagv(dy, lag)
     }
   }
   
@@ -272,18 +276,21 @@ qnardl <- function(formula, data, tau = c(0.25, 0.5, 0.75),
   
   # Get summary for inference
   fit_summary <- tryCatch({
-    summary(fit, se = "boot", R = 200)
+    summary(fit, se = "boot", R = 200, covariance = TRUE)
   }, error = function(e) {
-    summary(fit, se = "nid")
+    summary(fit, se = "nid", covariance = TRUE)
   })
-  
+
   coef_table <- fit_summary$coefficients
+  vc <- fit_summary$cov
+  if (!is.null(vc)) dimnames(vc) <- list(rownames(coef_table), rownames(coef_table))
   
   list(
     coefficients = coef_table[, 1],
     se = coef_table[, 2],
     t_values = coef_table[, 3],
     p_values = coef_table[, 4],
+    vcov = vc,
     residuals = fit$residuals,
     fitted = fit$fitted.values,
     tau = tau,
@@ -349,17 +356,19 @@ qnardl <- function(formula, data, tau = c(0.25, 0.5, 0.75),
       test_results$theta_neg[i] <- theta_neg
       test_results$diff[i] <- theta_pos - theta_neg
       
-      # Simplified Wald test (delta method approximation)
-      se_pos <- res$se[pos_var]
-      se_neg <- res$se[neg_var]
-      se_phi <- res$se["y_lag1"]
-      
-      # Variance of difference (simplified)
-      var_theta_pos <- (se_pos / phi)^2 + (beta_pos * se_phi / phi^2)^2
-      var_theta_neg <- (se_neg / phi)^2 + (beta_neg * se_phi / phi^2)^2
-      var_diff <- var_theta_pos + var_theta_neg
-      
-      wald <- (theta_pos - theta_neg)^2 / var_diff
+      # Wald test by the delta method with the full covariance matrix of
+      # (phi, beta_pos, beta_neg): theta_pos - theta_neg = -(beta_pos -
+      # beta_neg) / phi
+      idx <- c("y_lag1", pos_var, neg_var)
+      V <- res$vcov
+      if (is.null(V) || !all(idx %in% rownames(V))) {
+        var_diff <- NA_real_
+      } else {
+        g <- c((beta_pos - beta_neg) / phi^2, -1 / phi, 1 / phi)
+        var_diff <- as.numeric(t(g) %*% V[idx, idx] %*% g)
+      }
+
+      wald <- as.numeric((theta_pos - theta_neg)^2 / var_diff)
       test_results$wald_stat[i] <- wald
       test_results$p_value[i] <- 1 - pchisq(wald, df = 1)
     }

@@ -84,7 +84,7 @@ rardl <- function(formula, data, method = c("rolling", "recursive"),
   n <- length(y)
   
   # Validate window size
-  max_lag <- max(p, max(q))
+  max_lag <- max(p + 1, max(q))  # p lagged differences of y need p + 1 initial observations
   min_required <- max_lag + k + 5 + case  # Minimum observations needed
   
   if (method == "rolling" && window < min_required) {
@@ -136,9 +136,9 @@ rardl <- function(formula, data, method = c("rolling", "recursive"),
       lr_coefs[w, ] <- result$lr_coefs
       
       # Make cointegration decision
-      if (F_stats[w] > cv$F_I1["5%"]) {
+      if (F_stats[w] > cv$F_bounds$I1) {
         coint_decisions[w] <- "COINT"
-      } else if (F_stats[w] < cv$F_I0["5%"]) {
+      } else if (F_stats[w] < cv$F_bounds$I0) {
         coint_decisions[w] <- "NO_COINT"
       } else {
         coint_decisions[w] <- "INCONC"
@@ -215,7 +215,7 @@ rardl <- function(formula, data, method = c("rolling", "recursive"),
   
   if (length(q) == 1) q <- rep(q, k)
   
-  max_lag <- max(p, max(q))
+  max_lag <- max(p + 1, max(q))  # p lagged differences of y need p + 1 initial observations
   valid_idx <- (max_lag + 1):n
   n_valid <- length(valid_idx)
   
@@ -226,7 +226,7 @@ rardl <- function(formula, data, method = c("rolling", "recursive"),
   # Lagged differences
   dy_lags <- matrix(NA, n_valid, p)
   for (i in 1:p) {
-    dy_lags[, i] <- diff(y)[(max_lag - i + 1):(n - i)]
+    dy_lags[, i] <- diff(y)[(max_lag - i):(n - 1 - i)]
   }
   
   # Independent variables
@@ -505,13 +505,13 @@ plot.rardl <- function(x, type = c("F", "ec", "lr", "all"), ...) {
                   main = "Rolling F-Statistic (Bounds Test)")
     
     # Add critical value bands
-    graphics::abline(h = x$critical_values$F_I1["5%"], col = "red", lty = 2)
-    graphics::abline(h = x$critical_values$F_I0["5%"], col = "red", lty = 2)
+    graphics::abline(h = x$critical_values$F_bounds$I1, col = "red", lty = 2)
+    graphics::abline(h = x$critical_values$F_bounds$I0, col = "red", lty = 2)
     
     # Shade regions
     graphics::polygon(c(idx, rev(idx)), 
-                     c(rep(x$critical_values$F_I0["5%"], n), 
-                       rep(x$critical_values$F_I1["5%"], n)),
+                     c(rep(x$critical_values$F_bounds$I0, n), 
+                       rep(x$critical_values$F_bounds$I1, n)),
                      col = grDevices::rgb(1, 0, 0, 0.1), border = NA)
     
     graphics::legend("topright", 

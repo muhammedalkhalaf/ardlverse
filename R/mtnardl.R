@@ -113,7 +113,7 @@ mtnardl <- function(formula, data, thresholds = c(0), p = 1, q = 1, case = 3,
   q_expanded <- rep(q, each = n_regimes)
   
   # Build ARDL model matrix
-  max_lag <- max(p, max(q))
+  max_lag <- max(p + 1, max(q))  # p lagged differences of y need p + 1 initial observations
   valid_idx <- (max_lag + 1):n
   n_valid <- length(valid_idx)
   
@@ -126,7 +126,7 @@ mtnardl <- function(formula, data, thresholds = c(0), p = 1, q = 1, case = 3,
   # Lagged differences of dependent variable
   dy_lags <- matrix(NA, n_valid, p)
   for (i in 1:p) {
-    dy_lags[, i] <- diff(y)[(max_lag - i + 1):(n - i)]
+    dy_lags[, i] <- diff(y)[(max_lag - i):(n - 1 - i)]
   }
   colnames(dy_lags) <- paste0("d.", y_var, ".l", 1:p)
   
@@ -424,8 +424,8 @@ mtnardl <- function(formula, data, thresholds = c(0), p = 1, q = 1, case = 3,
                 p_values = c(F = p_F, t = p_t), method = "bootstrap"))
   }
   
-  F_upper <- cv$F_I1["5%"]
-  F_lower <- cv$F_I0["5%"]
+  F_upper <- cv$F_bounds$I1
+  F_lower <- cv$F_bounds$I0
 
   if (length(F_upper) == 0 || is.na(F_upper) ||
       length(F_lower) == 0 || is.na(F_lower) ||

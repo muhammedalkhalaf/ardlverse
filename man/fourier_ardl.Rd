@@ -52,11 +52,11 @@ An object of class "fourier_ardl" containing:
 \item{structural_breaks}{Detected structural break periods}
 }
 \references{
-Banerjee, P., Arcabic, V., & Lee, H. (2017). Fourier ADL cointegration test
+Banerjee, P., Arcabic, V. and Lee, H. (2017). Fourier ADL cointegration test
 to approximate smooth breaks with new evidence from crude oil market.
 Economic Modelling, 67, 114-124.
 
-Enders, W., & Lee, J. (2012). A unit root test using a Fourier series to
+Enders, W. and Lee, J. (2012). A unit root test using a Fourier series to
 approximate smooth breaks. Oxford Bulletin of Economics and Statistics,
 74(4), 574-599.
 }

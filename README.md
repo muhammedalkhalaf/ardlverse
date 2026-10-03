@@ -72,6 +72,15 @@ summary(boot_test)
 plot(boot_test)
 ```
 
+Since version 2.1.0 the bootstrap is recursive (y* and x* are generated
+from the estimated model under the null): separate nulls for Fov, t and Find
+following Bertelli, Vacca and Zoia (2022) by default, or the joint null of
+McNown, Sam and Goh (2018) with `nulls = "joint"`. Cointegration is concluded
+only when Fov, t and Find all reject. The same engine is used by the
+bootstrap types of `aardl()`, by `mtnardl(bootstrap = TRUE)` and by
+`fbnardl(type = "fbnardl")`. With Fourier terms no valid bounds exist; use
+the bootstrap.
+
 ### Quantile Nonlinear ARDL
 
 ```r
@@ -193,7 +202,8 @@ summary(pnardl_model)
 |----------|-------------|
 | `aardl()` | Augmented ARDL with deferred t and F tests (8 sub-models) |
 | `mtnardl()` | Multiple-Threshold NARDL for complex asymmetries |
-| `rardl()` | Rolling & Recursive ARDL for time-varying relationships |
+| `fbnardl()` | Fourier (bootstrap) nonlinear ARDL with frequency and lag selection |
+| `rardl()` | Rolling and Recursive ARDL for time-varying relationships |
 | `pnardl()` | Panel Nonlinear ARDL (PMG/MG/DFE with asymmetry) |
 
 ### Supporting Functions
@@ -208,19 +218,19 @@ summary(pnardl_model)
 
 ## Theoretical Background
 
-### Panel ARDL (Pesaran, Shin & Smith, 1999)
+### Panel ARDL (Pesaran, Shin and Smith, 1999)
 
 The PMG estimator allows for heterogeneous short-run dynamics while constraining long-run coefficients to be equal across groups:
 
 $$\Delta y_{it} = \phi_i (y_{i,t-1} - \theta' x_{it}) + \sum_{j=1}^{p-1} \lambda_{ij} \Delta y_{i,t-j} + \sum_{j=0}^{q-1} \delta'_{ij} \Delta x_{i,t-j} + \mu_i + \varepsilon_{it}$$
 
-### QNARDL (Cho, Kim & Shin, 2015 + Shin, Yu & Greenwood-Nimmo, 2014)
+### QNARDL (Cho, Kim and Shin, 2015 + Shin, Yu and Greenwood-Nimmo, 2014)
 
 Combines quantile regression with asymmetric decomposition:
 
 $$x^+_t = \sum_{j=1}^{t} \max(\Delta x_j, 0), \quad x^-_t = \sum_{j=1}^{t} \min(\Delta x_j, 0)$$
 
-### Fourier ARDL (Banerjee, Arcabic & Lee, 2017)
+### Fourier ARDL (Banerjee, Arcabic and Lee, 2017)
 
 Captures smooth structural breaks using Fourier approximation:
 
@@ -228,19 +238,21 @@ $$f_t = \sum_{k=1}^{K} [a_k \sin(2\pi k t/T) + b_k \cos(2\pi k t/T)]$$
 
 ## References
 
-- Pesaran, M. H., Shin, Y., & Smith, R. P. (1999). Pooled mean group estimation of dynamic heterogeneous panels. *Journal of the American Statistical Association*, 94(446), 621-634.
+- Pesaran, M. H., Shin, Y. and Smith, R. P. (1999). Pooled mean group estimation of dynamic heterogeneous panels. *Journal of the American Statistical Association*, 94(446), 621-634.
 
-- Pesaran, M. H., Shin, Y., & Smith, R. J. (2001). Bounds testing approaches to the analysis of level relationships. *Journal of Applied Econometrics*, 16(3), 289-326.
+- Pesaran, M. H., Shin, Y. and Smith, R. J. (2001). Bounds testing approaches to the analysis of level relationships. *Journal of Applied Econometrics*, 16(3), 289-326.
 
-- Shin, Y., Yu, B., & Greenwood-Nimmo, M. (2014). Modelling asymmetric cointegration and dynamic multipliers in a nonlinear ARDL framework. In *Festschrift in Honor of Peter Schmidt* (pp. 281-314). Springer.
+- Shin, Y., Yu, B. and Greenwood-Nimmo, M. (2014). Modelling asymmetric cointegration and dynamic multipliers in a nonlinear ARDL framework. In *Festschrift in Honor of Peter Schmidt* (pp. 281-314). Springer.
 
-- Cho, J. S., Kim, T. H., & Shin, Y. (2015). Quantile cointegration in the autoregressive distributed-lag modeling framework. *Journal of Econometrics*, 188(1), 281-300.
+- Cho, J. S., Kim, T. H. and Shin, Y. (2015). Quantile cointegration in the autoregressive distributed-lag modeling framework. *Journal of Econometrics*, 188(1), 281-300.
 
-- Banerjee, P., Arcabic, V., & Lee, H. (2017). Fourier ADL cointegration test to approximate smooth breaks with new evidence from crude oil market. *Economic Modelling*, 67, 114-124.
+- Banerjee, P., Arcabic, V. and Lee, H. (2017). Fourier ADL cointegration test to approximate smooth breaks with new evidence from crude oil market. *Economic Modelling*, 67, 114-124.
 
-- McNown, R., Sam, C. Y., & Goh, S. K. (2018). Bootstrapping the autoregressive distributed lag test for cointegration. *Applied Economics*, 50(13), 1509-1521.
+- Bertelli, S., Vacca, G. and Zoia, M. (2022). Bootstrap cointegration tests in ARDL models. *Economic Modelling*, 116, 105987.
 
-- Sam, C. Y., McNown, R., & Goh, S. K. (2019). An augmented autoregressive distributed lag bounds test for cointegration. *Economic Modelling*, 80, 130-141.
+- McNown, R., Sam, C. Y. and Goh, S. K. (2018). Bootstrapping the autoregressive distributed lag test for cointegration. *Applied Economics*, 50(13), 1509-1521.
+
+- Sam, C. Y., McNown, R. and Goh, S. K. (2019). An augmented autoregressive distributed lag bounds test for cointegration. *Economic Modelling*, 80, 130-141.
 
 ## Author
 

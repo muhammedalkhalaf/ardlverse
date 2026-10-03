@@ -1,5 +1,5 @@
-# Replication of Blackburne & Frank (2007, Stata Journal)
-# Data: Pesaran, Shin & Smith (1999) OECD consumption panel
+# Replication of Blackburne and Frank (2007, Stata Journal)
+# Data: Pesaran, Shin and Smith (1999) OECD consumption panel
 # Reference output from st0125.md
 #
 # Target PMG results:
@@ -90,8 +90,8 @@ cat("DFE targets (SR): ec=-0.1794146 (SE=0.0434584), D.pi=-0.0280826 (SE=0.03256
 # ── Hausman tests ─────────────────────────────────────────────────────────────
 # Stata: hausman mg pmg, sigmamore  → chi2(2)=1.06, p=0.5887
 # Stata: hausman mg DFE, sigmamore  → chi2(2)=0.00, p=1.0000
-cat("=== Hausman test (MG vs PMG) — target: chi2(2)=1.06, p=0.5887 ===\n")
+cat("=== Hausman test (MG vs PMG): target chi2(2)=1.06, p=0.5887 ===\n")
 hausman_test(mg, pmg)
 
-cat("=== Hausman test (MG vs DFE) — target: chi2(2)=0.00, p=1.0000 ===\n")
+cat("=== Hausman test (MG vs DFE): target chi2(2)=0.00, p=1.0000 ===\n")
 hausman_test(mg, dfe)

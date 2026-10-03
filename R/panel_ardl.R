@@ -6,8 +6,8 @@
 #' @title Panel ARDL Estimation (PMG / MG / DFE)
 #' @description Estimate Panel ARDL models with Pooled Mean Group (PMG),
 #'   Mean Group (MG), and Dynamic Fixed Effects (DFE) estimators following
-#'   Pesaran, Shin & Smith (1999). This implementation replicates Stata's
-#'   \code{xtpmg} command (Blackburne & Frank 2007).
+#'   Pesaran, Shin and Smith (1999). This implementation replicates Stata's
+#'   \code{xtpmg} command (Blackburne and Frank 2007).
 #'
 #' @details
 #' The model is specified as:
@@ -50,11 +50,11 @@
 #' }
 #'
 #' @references
-#' Pesaran, M. H., Shin, Y., & Smith, R. P. (1999). Pooled mean group
+#' Pesaran, M. H., Shin, Y. and Smith, R. P. (1999). Pooled mean group
 #' estimation of dynamic heterogeneous panels. \emph{Journal of the American
 #' Statistical Association}, 94(446), 621-634.
 #'
-#' Blackburne, E. F., & Frank, M. W. (2007). Estimation of nonstationary
+#' Blackburne, E. F. and Frank, M. W. (2007). Estimation of nonstationary
 #' heterogeneous panels. \emph{Stata Journal}, 7(2), 197-208.
 #'
 #' @examples

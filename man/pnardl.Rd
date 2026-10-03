@@ -59,10 +59,10 @@ An object of class "pnardl" containing:
 \item{hausman}{Hausman test comparing PMG vs MG}
 }
 \references{
-Shin, Y., Yu, B., & Greenwood-Nimmo, M. (2014). Modelling asymmetric
+Shin, Y., Yu, B. and Greenwood-Nimmo, M. (2014). Modelling asymmetric
 cointegration and dynamic multipliers in a nonlinear ARDL framework.
 
-Pesaran, M. H., Shin, Y., & Smith, R. P. (1999). Pooled mean group estimation
+Pesaran, M. H., Shin, Y. and Smith, R. P. (1999). Pooled mean group estimation
 of dynamic heterogeneous panels. Journal of the American Statistical Association.
 }
 \examples{

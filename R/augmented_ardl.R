@@ -1,47 +1,89 @@
 #' @title Augmented ARDL Bounds Test (AARDL)
-#' @description Implements the Augmented ARDL bounds testing approach with 
-#' deferred t and F tests for cointegration analysis.
+#' @description Augmented ARDL bounds test with the overall F test, the t
+#'   test on the lagged dependent variable and the F test on the lagged
+#'   independent variables, in linear, nonlinear (NARDL) and Fourier
+#'   variants, with Kripfganz and Schneider (2020) bounds or bootstrap
+#'   critical values.
 #'
 #' @details
-#' The Augmented ARDL (AARDL) approach extends the standard ARDL bounds test
-#' by implementing additional diagnostic tests proposed by Sam, McNown & Goh (2019).
-#' This addresses potential weaknesses in the PSS bounds test by adding:
+#' Three statistics are computed from the conditional error correction model:
 #' \itemize{
-#'   \item Deferred t-test (t_dep): Tests significance of lagged dependent variable
-#'   \item Deferred F-test (F_ind): Tests joint significance of independent variables
-#'   \item Overall F-test with all deferred conditions
+#'   \item \code{F_pss}: F test that the lagged levels of y and of the
+#'     regressors are jointly zero (with the intercept in case 2 and the
+#'     trend in case 4; Pesaran, Shin and Smith, 2001)
+#'   \item \code{t_dep}: t test on the lagged dependent variable
+#'   \item \code{F_ind}: F test on the lagged independent variables
+#'     (McNown, Sam and Goh, 2018)
 #' }
 #'
 #' The function supports 8 sub-models:
 #' \enumerate{
-#'   \item Standard ARDL
-#'   \item ARDL with bootstrap
-#'   \item Nonlinear ARDL (NARDL)
-#'   \item Fourier ARDL
-#'   \item Fourier NARDL
-#'   \item Bootstrap NARDL
-#'   \item Fourier Bootstrap ARDL
-#'   \item Fourier Bootstrap NARDL
+#'   \item \code{"linear"}: ARDL, Kripfganz and Schneider (2020) bounds for
+#'     F_pss and t_dep (F_ind has no tabulated bounds)
+#'   \item \code{"nardl"}: NARDL with positive and negative partial sums;
+#'     the bounds use k = number of partial sums
+#'   \item \code{"fourier"}: ARDL with Fourier terms. No valid bounds exist
+#'     for the bounds test with Fourier terms; no decision is reported and
+#'     the bounds shown are those of the model without Fourier terms, for
+#'     reference only (as in \code{\link{fourier_bounds_test}})
+#'   \item \code{"fnardl"}: NARDL with Fourier terms; as \code{"fourier"}
+#'   \item \code{"bootstrap"}: ARDL with bootstrap critical values
+#'   \item \code{"bnardl"}: NARDL with bootstrap critical values
+#'   \item \code{"fbootstrap"}: Fourier ARDL with bootstrap critical values
+#'   \item \code{"fbnardl"}: Fourier NARDL with bootstrap critical values
 #' }
+#' The bootstrap types use the recursive bootstrap of
+#' \code{\link{boot_ardl}} (separate nulls of Bertelli, Vacca and Zoia,
+#' 2022, by default, or the Fov null for all statistics of McNown, Sam and
+#' Goh, 2018, applied to the conditional ECM, a package choice): y* and
+#' x* are generated recursively, the partial sums are rebuilt from x* with
+#' the same decomposition as the data, and the Fourier terms at the chosen
+#' \code{fourier_k} are held fixed. The decision requires F_pss, t_dep and
+#' F_ind to reject; the degenerate cases are labelled. With Fourier terms the
+#' bootstrap is valid for the given \code{fourier_k}; it does not account for
+#' a data-based choice of \code{fourier_k}.
+#' With Fourier terms and partial sums (type \code{"fbnardl"}) the F_ind test
+#' of the separate-null bootstrap over-rejects: in a Monte Carlo with
+#' independent random walks (n = 100, 200 samples, B = 199) it rejected in
+#' 16.0\% (Monte Carlo s.e. 2.6\%) of the samples at the 5\% level, and an
+#' independent review Monte Carlo gave 11.3\% (s.e. 1.8\%); the combined
+#' decision rejected in 6.0\% (s.e. 1.7\%).
+
+#' The name follows the augmented ARDL bounds test of Sam, McNown and Goh
+#' (2019); that paper was not available for this release, so its bootstrap
+#' details are not reproduced here (pending verification): the bootstrap is
+#' the one of Bertelli, Vacca and Zoia (2022) or McNown, Sam and Goh (2018).
 #'
-#' @param formula A formula specifying the model: gdp ~ investment + trade + ...
-#' @param data A data frame containing the time series data
-#' @param p Integer. Number of lags for dependent variable (default: 1)
-#' @param q Integer or vector. Number of lags for independent variables (default: 1)
+#' @param formula A formula such as \code{gdp ~ investment + trade}; only
+#'   plain variable names are accepted.
+#' @param data A data frame containing the time series (no missing values).
+#' @param p Integer. Number of lagged differences of the dependent variable
+#'   (default: 1)
+#' @param q Integer or vector. Number of differences of each regressor,
+#'   lags 0 to \code{q - 1} (default: 1)
 #' @param case Integer from 1-5 specifying deterministic components
 #' @param type Character. Model type: "linear", "nardl", "fourier", "fnardl",
 #'   "bootstrap", "bnardl", "fbootstrap", "fbnardl" (default: "linear")
 #' @param nboot Number of bootstrap replications (default: 2000)
 #' @param fourier_k Integer. Number of Fourier frequencies (default: 1, max: 3)
 #' @param threshold Numeric. Threshold value for NARDL decomposition (default: 0)
-#' @param seed Random seed for reproducibility
+#' @param seed Random seed; used locally, the session's random number
+#'   generator state is restored afterwards.
+#' @param nulls Bootstrap nulls, \code{"separate"} (default) or
+#'   \code{"joint"}; see \code{\link{boot_ardl}}.
 #'
 #' @return An object of class "aardl" containing:
 #' \itemize{
 #'   \item \code{F_pss}: PSS F-statistic for bounds test
-#'   \item \code{t_dep}: Deferred t-statistic for lagged dependent variable
-#'   \item \code{F_ind}: Deferred F-statistic for independent variables
-#'   \item \code{conclusion}: Cointegration decision based on all tests
+#'   \item \code{t_dep}: t-statistic for the lagged dependent variable
+#'   \item \code{F_ind}: F-statistic for the lagged independent variables
+#'   \item \code{critical_values}: Kripfganz and Schneider (2020) bounds
+#'     (for the Fourier types: bounds of the model without Fourier terms,
+#'     not valid for the estimated model)
+#'   \item \code{boot_results}: bootstrap distributions, critical values and
+#'     the engine output (bootstrap types)
+#'   \item \code{conclusion}: list with \code{decision}, \code{message},
+#'     \code{method} (and \code{p_values} for the bootstrap types)
 #'   \item \code{model}: The estimated ARDL model
 #'   \item \code{long_run}: Long-run coefficients
 #'   \item \code{short_run}: Short-run coefficients
@@ -49,27 +91,38 @@
 #' }
 #'
 #' @references
-#' Sam, C. Y., McNown, R., & Goh, S. K. (2019). An augmented autoregressive 
-#' distributed lag bounds test for cointegration. Economic Modelling, 80, 130-141.
+#' Bertelli, S., Vacca, G. and Zoia, M. (2022). Bootstrap cointegration
+#' tests in ARDL models. \emph{Economic Modelling}, 116, 105987.
+#' \doi{10.1016/j.econmod.2022.105987}
 #'
-#' McNown, R., Sam, C. Y., & Goh, S. K. (2018). Bootstrapping the autoregressive
-#' distributed lag test for cointegration. Applied Economics, 50(13), 1509-1521.
+#' Kripfganz, S. and Schneider, D. C. (2020). Response surface regressions
+#' for critical value bounds and approximate p-values in equilibrium
+#' correction models. \emph{Oxford Bulletin of Economics and Statistics},
+#' 82(6), 1456-1481. \doi{10.1111/obes.12377}
+#'
+#' McNown, R., Sam, C. Y. and Goh, S. K. (2018). Bootstrapping the
+#' autoregressive distributed lag test for cointegration. \emph{Applied
+#' Economics}, 50(13), 1509-1521. \doi{10.1080/00036846.2017.1366643}
+#'
+#' Pesaran, M. H., Shin, Y. and Smith, R. J. (2001). Bounds testing
+#' approaches to the analysis of level relationships. \emph{Journal of
+#' Applied Econometrics}, 16(3), 289-326. \doi{10.1002/jae.616}
+#'
+#' Sam, C. Y., McNown, R. and Goh, S. K. (2019). An augmented autoregressive
+#' distributed lag bounds test for cointegration. \emph{Economic Modelling},
+#' 80, 130-141. \doi{10.1016/j.econmod.2018.11.001}
 #'
 #' @examples
-#' \donttest{
-#' # Generate example data
-#' data <- generate_ts_data(n = 200)
-#'
-#' # Standard Augmented ARDL
+#' data <- generate_ts_data(n = 80, seed = 1)
 #' result <- aardl(gdp ~ investment + trade, data = data, p = 2, q = 2, case = 3)
+#' result
+#' boot <- aardl(gdp ~ investment, data = data, type = "bnardl", nboot = 29,
+#'               seed = 1)
+#' boot
+#' \donttest{
 #' summary(result)
-#'
-#' # Augmented NARDL (nonlinear)
-#' result_nardl <- aardl(gdp ~ investment + trade, data = data, type = "nardl")
-#' summary(result_nardl)
-#'
-#' # Fourier Augmented ARDL
-#' result_fourier <- aardl(gdp ~ investment + trade, data = data, type = "fourier", fourier_k = 2)
+#' result_fourier <- aardl(gdp ~ investment, data = data, type = "fbootstrap",
+#'                         fourier_k = 1, nboot = 49, seed = 1)
 #' summary(result_fourier)
 #' }
 #'
@@ -77,187 +130,100 @@
 aardl <- function(formula, data, p = 1, q = 1, case = 3,
                   type = c("linear", "nardl", "fourier", "fnardl",
                           "bootstrap", "bnardl", "fbootstrap", "fbnardl"),
-                  nboot = 2000, fourier_k = 1, threshold = 0, seed = NULL) {
-  
+                  nboot = 2000, fourier_k = 1, threshold = 0, seed = NULL,
+                  nulls = c("separate", "joint")) {
+
   type <- match.arg(type)
-  if (!is.null(seed)) set.seed(seed)
-  
-  # Validate inputs
+  nulls <- match.arg(nulls)
+
   if (!case %in% 1:5) {
     stop("'case' must be an integer from 1 to 5")
   }
   if (fourier_k < 1 || fourier_k > 3) {
     stop("'fourier_k' must be between 1 and 3")
   }
-  
-  # Parse formula
-  formula_vars <- all.vars(formula)
-  y_var <- formula_vars[1]
-  x_vars <- formula_vars[-1]
-  k <- length(x_vars)
-  
-  # Handle q as vector or scalar
-  if (length(q) == 1) q <- rep(q, k)
-  
-  # Get variables
+  if (p < 1) stop("'p' must be at least 1")
+
+  fv <- .ardl_formula_vars(formula, data)
+  y_var <- fv$y_var
+  x_vars <- fv$x_vars
+  k0 <- length(x_vars)
+  if (length(q) == 1) q <- rep(q, k0)
+  if (length(q) != k0) stop("'q' must have length 1 or one entry per regressor")
+  if (any(q < 1)) stop("'q' must be at least 1 (lags 0 to q - 1 of the differences)")
+
   y <- data[[y_var]]
-  X <- as.matrix(data[, x_vars, drop = FALSE])
-  n <- length(y)
-  
-  # Apply transformations based on type
+  X0 <- as.matrix(data[, x_vars, drop = FALSE])
+
   use_fourier <- type %in% c("fourier", "fnardl", "fbootstrap", "fbnardl")
   use_nardl <- type %in% c("nardl", "fnardl", "bnardl", "fbnardl")
   use_bootstrap <- type %in% c("bootstrap", "bnardl", "fbootstrap", "fbnardl")
-  
-  # Decompose variables for NARDL
-  if (use_nardl) {
-    X_decomp <- .decompose_asymmetric(X, threshold)
-    x_vars_new <- c(paste0(x_vars, "_pos"), paste0(x_vars, "_neg"))
-    X <- X_decomp
-    k <- ncol(X)
-    if (length(q) == length(x_vars)) {
-      q <- rep(q, 2)  # Duplicate for pos/neg
-    }
-  }
-  
-  # Create Fourier terms
-  fourier_terms <- NULL
-  if (use_fourier) {
-    fourier_terms <- .create_fourier_terms(n, fourier_k)
-  }
-  
-  # Build ARDL model matrix
-  max_lag <- max(p + 1, max(q))  # p lagged differences of y need p + 1 initial observations
-  valid_idx <- (max_lag + 1):n
-  n_valid <- length(valid_idx)
-  
-  # Dependent variable in differences
-  dy <- diff(y)[(max_lag):(n-1)]
-  
-  # Lagged dependent variable (level) for EC term
-  y_lag <- y[valid_idx - 1]
-  
-  # Lagged differences of dependent variable
-  dy_lags <- matrix(NA, n_valid, p)
-  for (i in 1:p) {
-    dy_lags[, i] <- diff(y)[(max_lag - i):(n - 1 - i)]
-  }
-  colnames(dy_lags) <- paste0("d.", y_var, ".l", 1:p)
-  
-  # Independent variables: levels and differences
-  x_levels <- matrix(NA, n_valid, k)
-  x_diff_list <- list()
-  
-  for (j in 1:k) {
-    x_j <- if (use_nardl) X[, j] else X[, j]
-    x_levels[, j] <- x_j[valid_idx - 1]
-    
-    dx_j <- diff(x_j)
-    x_diff_j <- matrix(NA, n_valid, q[min(j, length(q))])
-    for (i in 0:(q[min(j, length(q))] - 1)) {
-      x_diff_j[, i + 1] <- dx_j[(max_lag - i):(n - 1 - i)]
-    }
-    x_diff_list[[j]] <- x_diff_j
-  }
-  
-  if (use_nardl) {
-    colnames(x_levels) <- x_vars_new
-  } else {
-    colnames(x_levels) <- x_vars
-  }
-  
-  # Combine difference terms
-  x_diffs <- do.call(cbind, x_diff_list)
-  
-  # Build design matrix
-  design <- cbind(y_lag, x_levels, dy_lags, x_diffs)
-  
-  # Add deterministic components
-  if (case >= 2) {
-    design <- cbind(design, intercept = 1)
-  }
-  if (case >= 4) {
-    trend <- 1:n_valid
-    design <- cbind(design, trend = trend)
-  }
-  
-  # Add Fourier terms
-  if (use_fourier) {
-    fourier_valid <- fourier_terms[valid_idx, , drop = FALSE]
-    design <- cbind(design, fourier_valid)
-  }
-  
-  # Estimate model
+
+  spec <- list(y_var = y_var, x_vars = x_vars, p = p, q = q, case = case,
+               use_nardl = use_nardl, use_fourier = use_fourier,
+               fourier_k = fourier_k, threshold = threshold)
+  dd <- .aardl_design(y, X0, spec)
+  design <- dd$design
+  dy <- dd$dy
+  k <- dd$k
+  n_valid <- length(dy)
+  q_used <- dd$q_levels
+
   model <- stats::lm(dy ~ design - 1)
   coefs <- stats::coef(model)
-  vcov_mat <- stats::vcov(model)
-  
-  # Extract coefficients for tests
-  ec_coef <- coefs[1]  # Coefficient on lagged y
-  ec_se <- sqrt(vcov_mat[1, 1])
-  
-  # === PSS F-test (joint test on level variables) ===
-  # H0: coefficient on y_{t-1} and all x_{t-1} are jointly zero
-  # H0 also restricts the intercept (case 2) or the trend (case 4)
+  ec_coef <- coefs[1]
+
+  st <- .aardl_stats(dy, design, k, case)
+  F_pss <- unname(st["Fov"])
+  t_dep <- unname(st["t"])
+  F_ind <- if (k > 0) unname(st["Find"]) else NA
+
+  # Kripfganz and Schneider (2020) bounds; for the Fourier types these are
+  # the bounds of the model without Fourier terms (reference only)
   n_level_vars <- 1 + k
-  idx_h0 <- seq_len(n_level_vars)
-  dn <- colnames(design)
-  if (case == 2) idx_h0 <- c(idx_h0, which(dn == "intercept"))
-  if (case == 4) idx_h0 <- c(idx_h0, which(dn == "trend"))
-
-  beta_h0 <- coefs[idx_h0]
-  V_h0 <- vcov_mat[idx_h0, idx_h0]
-
-  F_pss <- as.numeric(t(beta_h0) %*% solve(V_h0) %*% beta_h0 / length(idx_h0))
-  
-  # === Deferred t-test (t_dep) ===
-  # Test significance of lagged dependent variable alone
-  t_dep <- ec_coef / ec_se
-  
-  # === Deferred F-test (F_ind) ===
-  # Test joint significance of lagged independent variables
-  if (k > 0) {
-    beta_ind <- coefs[2:(1 + k)]
-    V_ind <- vcov_mat[2:(1 + k), 2:(1 + k)]
-    F_ind <- as.numeric(t(beta_ind) %*% solve(V_ind) %*% beta_ind / k)
-  } else {
-    F_ind <- NA
-  }
-  
-  # === Get Critical Values ===
-  # Short-run coefficients: regressors other than the deterministic terms
-  # and the k + 1 lagged levels (Fourier terms included)
-  sr <- ncol(design) - n_level_vars - (case >= 2) - (case >= 4)
+  n_fourier <- if (use_fourier) 2 * fourier_k else 0
+  sr <- ncol(design) - n_level_vars - (case >= 2) - (case >= 4) - n_fourier
   cv <- .aardl_critical_values(k, case, n_valid, sr)
-  
-  # === Bootstrap inference if requested ===
+
   boot_results <- NULL
   if (use_bootstrap) {
-    boot_results <- .aardl_bootstrap(dy, design, n_level_vars, k, nboot, idx_h0)
+    stat_fun <- function(yy, xx, sp) .aardl_stats_from_data(yy, xx, spec)
+    dec <- if (use_nardl) .aardl_decomposer(threshold) else NULL
+    eng <- .ardl_boot_engine(y, X0, p = p, q = q_used - 1, case = case,
+                             t0 = max(p + 1, max(q_used)) + 1,
+                             det = dd$fourier_terms, decompose = dec,
+                             nulls = nulls,
+                             xmodel = if (nulls == "separate") "vecm" else "var",
+                             B = nboot,
+                             init = if (nulls == "separate") "block" else "observed",
+                             recentre = if (nulls == "separate") "draw" else "once",
+                             stat_fun = stat_fun, use_find = k > 0, seed = seed)
+    nm <- c("90%", "95%", "97.5%", "99%")
+    boot_results <- list(
+      F_dist = eng$boot[, "Fov"],
+      t_dist = eng$boot[, "t"],
+      F_ind_dist = eng$boot[, "Find"],
+      cv_F = stats::setNames(eng$cv[, "Fov"], nm),
+      cv_t = stats::setNames(eng$cv[, "t"], c("10%", "5%", "2.5%", "1%")),
+      cv_F_ind = stats::setNames(eng$cv[, "Find"], nm),
+      engine = eng
+    )
   }
-  
-  # === Make Conclusion ===
-  conclusion <- .aardl_conclusion(F_pss, t_dep, F_ind, cv, boot_results)
-  
 
-  # === Long-run coefficients ===
+  conclusion <- .aardl_conclusion(F_pss, t_dep, F_ind, cv, boot_results,
+                                  fourier = use_fourier)
+
   if (abs(ec_coef) > 1e-10) {
     lr_coefs <- -coefs[2:(1 + k)] / ec_coef
-    if (use_nardl) {
-      names(lr_coefs) <- x_vars_new
-    } else {
-      names(lr_coefs) <- x_vars
-    }
+    names(lr_coefs) <- dd$level_names
   } else {
     lr_coefs <- rep(NA, k)
   }
-  
-  # === Short-run coefficients ===
+
   sr_start <- 1 + k + 1
   sr_end <- sr_start + p - 1
   sr_coefs <- coefs[sr_start:sr_end]
-  
-  # === Model fit statistics ===
+
   fit_stats <- list(
     R2 = summary(model)$r.squared,
     adj_R2 = summary(model)$adj.r.squared,
@@ -266,16 +232,14 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
     sigma = summary(model)$sigma,
     df = model$df.residual
   )
-  
-  # === Diagnostic tests ===
+
   resid <- stats::residuals(model)
   diagnostics <- list(
     serial_corr = .breusch_godfrey_test(resid, 2),
     heteroskedasticity = .breusch_pagan_test(model),
     normality = stats::shapiro.test(resid)$p.value
   )
-  
-  # Build result
+
   result <- list(
     F_pss = F_pss,
     t_dep = t_dep,
@@ -295,12 +259,105 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
     n = n_valid,
     k = k,
     p = p,
-    q = q,
+    q = q_used,
     fourier_k = if (use_fourier) fourier_k else NULL
   )
-  
+
   class(result) <- "aardl"
   return(result)
+}
+
+
+#' @title Design matrix of aardl()
+#' @keywords internal
+.aardl_design <- function(y, X0, spec) {
+  y_var <- spec$y_var
+  x_vars <- spec$x_vars
+  p <- spec$p
+  q <- spec$q
+  case <- spec$case
+  n <- length(y)
+  X <- X0
+  level_names <- x_vars
+  if (spec$use_nardl) {
+    X <- .decompose_asymmetric(X0, spec$threshold)
+    level_names <- c(paste0(x_vars, "_pos"), paste0(x_vars, "_neg"))
+    q <- rep(q, 2)
+  }
+  k <- ncol(X)
+  fourier_terms <- if (spec$use_fourier) .create_fourier_terms(n, spec$fourier_k) else NULL
+
+  # p lagged differences of y need p + 1 initial observations
+  max_lag <- max(p + 1, max(q))
+  valid_idx <- (max_lag + 1):n
+  n_valid <- length(valid_idx)
+  if (n_valid <= 5) stop("Insufficient observations for specified lag structure")
+
+  dy <- diff(y)[(max_lag):(n - 1)]
+  y_lag <- y[valid_idx - 1]
+  dy_lags <- matrix(NA, n_valid, p)
+  for (i in 1:p) {
+    dy_lags[, i] <- diff(y)[(max_lag - i):(n - 1 - i)]
+  }
+  colnames(dy_lags) <- paste0("d.", y_var, ".l", 1:p)
+
+  x_levels <- matrix(NA, n_valid, k)
+  x_diff_list <- list()
+  for (j in 1:k) {
+    x_j <- X[, j]
+    x_levels[, j] <- x_j[valid_idx - 1]
+    dx_j <- diff(x_j)
+    x_diff_j <- matrix(NA, n_valid, q[j])
+    for (i in 0:(q[j] - 1)) {
+      x_diff_j[, i + 1] <- dx_j[(max_lag - i):(n - 1 - i)]
+    }
+    x_diff_list[[j]] <- x_diff_j
+  }
+  colnames(x_levels) <- level_names
+  x_diffs <- do.call(cbind, x_diff_list)
+  design <- cbind(y_lag, x_levels, dy_lags, x_diffs)
+  if (case >= 2) design <- cbind(design, intercept = 1)
+  if (case >= 4) design <- cbind(design, trend = 1:n_valid)
+  if (spec$use_fourier) design <- cbind(design, fourier_terms[valid_idx, , drop = FALSE])
+  list(dy = dy, design = design, k = k, q = spec$q, q_levels = q,
+       level_names = level_names, fourier_terms = fourier_terms)
+}
+
+
+#' @title Statistics of aardl(): F_pss (Fov), t_dep (t) and F_ind (Find)
+#' @keywords internal
+.aardl_stats <- function(dy, design, k, case) {
+  f <- stats::lm.fit(design, dy)
+  if (f$rank < ncol(design)) stop("rank-deficient design")
+  dfr <- length(dy) - ncol(design)
+  s2 <- sum(f$residuals^2) / dfr
+  nc <- ncol(design)
+  piv <- order(f$qr$pivot)
+  V <- s2 * chol2inv(f$qr$qr[seq_len(nc), seq_len(nc), drop = FALSE])[piv, piv]
+  b <- f$coefficients
+  W <- function(i) drop(crossprod(b[i], solve(V[i, i, drop = FALSE], b[i]))) / length(i)
+  dn <- colnames(design)
+  idx_h0 <- seq_len(1 + k)
+  if (case == 2) idx_h0 <- c(idx_h0, which(dn == "intercept"))
+  if (case == 4) idx_h0 <- c(idx_h0, which(dn == "trend"))
+  c(Fov = W(idx_h0), t = unname(b[1] / sqrt(V[1, 1])),
+    Find = if (k > 0) W(1 + seq_len(k)) else NA_real_)
+}
+
+.aardl_stats_from_data <- function(y, X0, spec) {
+  dd <- .aardl_design(y, X0, spec)
+  .aardl_stats(dd$dy, dd$design, dd$k, spec$case)
+}
+
+# Decomposition passed to the bootstrap engine: the partial sums of
+# .decompose_asymmetric() and their increments
+.aardl_decomposer <- function(threshold) {
+  list(full = function(x) .decompose_asymmetric(x, threshold),
+       step = function(d) {
+         a <- d - threshold
+         b <- d + threshold
+         c(a * (a > 0), b * (b < 0))
+       })
 }
 
 
@@ -344,8 +401,8 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
 #' @title AARDL Critical Values
 #' @description Bounds for the overall F and the t test from the response
 #'   surfaces of Kripfganz and Schneider (2020). The F test on the lagged
-#'   regressors has no tabulated bounds; Sam, McNown and Goh (2019) use
-#'   bootstrap critical values for it.
+#'   regressors has no tabulated bounds; the bootstrap types give critical
+#'   values for it.
 #' @keywords internal
 .aardl_critical_values <- function(k, case, n, sr = 0) {
   lv <- c(10, 5, 1)
@@ -359,112 +416,49 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
 }
 
 
-#' @title AARDL Bootstrap Procedure
-#' @keywords internal
-.aardl_bootstrap <- function(dy, design, n_level, k, nboot, idx_h0 = NULL) {
-  n <- length(dy)
-  
-  # Estimate null model (no cointegration)
-  idx_h0 <- if (is.null(idx_h0)) seq_len(n_level) else idx_h0
-  model_null <- stats::lm(dy ~ design[, -idx_h0, drop = FALSE] - 1)
-  resid_null <- stats::residuals(model_null)
-  fitted_null <- stats::fitted(model_null)
-  
-  boot_F <- numeric(nboot)
-  boot_t <- numeric(nboot)
-  boot_F_ind <- numeric(nboot)
-  
-  for (b in 1:nboot) {
-    # Resample residuals
-    boot_resid <- sample(resid_null, n, replace = TRUE)
-    boot_y <- fitted_null + boot_resid
-    
-    # Estimate full model on bootstrap sample
-    boot_model <- stats::lm(boot_y ~ design - 1)
-    boot_coefs <- stats::coef(boot_model)
-    boot_vcov <- stats::vcov(boot_model)
-    
-    # F-statistic
-    beta_h0 <- boot_coefs[idx_h0]
-    V_h0 <- boot_vcov[idx_h0, idx_h0]
-    boot_F[b] <- tryCatch({
-      as.numeric(t(beta_h0) %*% solve(V_h0) %*% beta_h0 / length(idx_h0))
-    }, error = function(e) NA)
-    
-    # t-statistic
-    boot_t[b] <- boot_coefs[1] / sqrt(boot_vcov[1, 1])
-    
-    # F_ind statistic
-    if (k > 0) {
-      beta_ind <- boot_coefs[2:(1 + k)]
-      V_ind <- boot_vcov[2:(1 + k), 2:(1 + k)]
-      boot_F_ind[b] <- tryCatch({
-        as.numeric(t(beta_ind) %*% solve(V_ind) %*% beta_ind / k)
-      }, error = function(e) NA)
-    }
-  }
-  
-  # Remove NAs
-  boot_F <- boot_F[!is.na(boot_F)]
-  boot_t <- boot_t[!is.na(boot_t)]
-  boot_F_ind <- boot_F_ind[!is.na(boot_F_ind)]
-  
-  list(
-    F_dist = boot_F,
-    t_dist = boot_t,
-    F_ind_dist = boot_F_ind,
-    cv_F = stats::quantile(boot_F, c(0.90, 0.95, 0.99)),
-    cv_t = stats::quantile(boot_t, c(0.10, 0.05, 0.01)),
-    cv_F_ind = stats::quantile(boot_F_ind, c(0.90, 0.95, 0.99))
-  )
-}
-
-
 #' @title AARDL Conclusion
+#' @description Bootstrap decision (F_pss, t_dep and F_ind must all reject;
+#'   degenerate cases labelled), Kripfganz and Schneider (2020) bounds
+#'   decision for the models without Fourier terms, and no decision for the
+#'   Fourier models without bootstrap.
 #' @keywords internal
-.aardl_conclusion <- function(F_pss, t_dep, F_ind, cv, boot = NULL) {
-  
+.aardl_conclusion <- function(F_pss, t_dep, F_ind, cv, boot = NULL,
+                              fourier = FALSE) {
+
   if (!is.null(boot)) {
-    # Bootstrap-based inference
-    p_F <- mean(boot$F_dist >= F_pss)
-    p_t <- mean(boot$t_dist <= t_dep)
-    p_F_ind <- mean(boot$F_ind_dist >= F_ind)
-    
-    coint_F <- p_F < 0.05
-    coint_t <- p_t < 0.05
-    coint_F_ind <- p_F_ind < 0.05
-    
-    if (coint_F && coint_t && coint_F_ind) {
-      conclusion <- "Cointegration confirmed (bootstrap): F_pss, t_dep, and F_ind all significant"
-      decision <- "COINTEGRATION"
-    } else if (coint_F && coint_t) {
-      conclusion <- "Possible cointegration (bootstrap): F_pss and t_dep significant, but F_ind not significant"
-      decision <- "INCONCLUSIVE"
-    } else {
-      conclusion <- "No cointegration (bootstrap): Failed to reject null hypothesis"
-      decision <- "NO_COINTEGRATION"
-    }
-    
+    eng <- boot$engine
     return(list(
-      decision = decision,
-      message = conclusion,
-      p_values = c(F_pss = p_F, t_dep = p_t, F_ind = p_F_ind),
+      decision = eng$decision,
+      message = paste0(eng$label, " (bootstrap, ", 100 * eng$level, "% level)"),
+      p_values = c(F_pss = unname(eng$p_value["Fov"]),
+                   t_dep = unname(eng$p_value["t"]),
+                   F_ind = unname(eng$p_value["Find"])),
       method = "bootstrap"
     ))
   }
-  
-  # Asymptotic inference
+
   F_lower <- cv$F$I0["95%"]
   F_upper <- cv$F$I1["95%"]
   t_lower <- cv$t$I0["95%"]
   t_upper <- cv$t$I1["95%"]
-  
-  # PSS bounds test decision (bounds from Kripfganz and Schneider, 2020)
+
+  if (fourier) {
+    return(list(
+      decision = "NOT_AVAILABLE",
+      message = paste("No valid bounds exist for the bounds test with Fourier",
+                      "terms; no decision is reported. Use type = 'fbootstrap'",
+                      "or 'fbnardl'. The bounds shown are for the model without",
+                      "Fourier terms; not valid with Fourier terms."),
+      bounds = list(F = c(F_lower, F_upper), t = c(t_lower, t_upper)),
+      method = "none"
+    ))
+  }
+
   if (any(is.na(c(F_lower, F_upper, t_lower, t_upper, F_pss, t_dep)))) {
     conclusion <- "Bounds unavailable (too few degrees of freedom); use the bootstrap"
     decision <- "INCONCLUSIVE"
   } else if (F_pss > F_upper && t_dep < t_upper) {
-    conclusion <- "Cointegration confirmed: F > I(1) bound and t < I(1) bound"
+    conclusion <- "Cointegration: F > I(1) bound and t < I(1) bound"
     decision <- "COINTEGRATION"
   } else if (F_pss < F_lower || t_dep > t_lower) {
     conclusion <- "No cointegration: Statistics within I(0) bounds"
@@ -473,7 +467,7 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
     conclusion <- "Inconclusive: Statistics between I(0) and I(1) bounds"
     decision <- "INCONCLUSIVE"
   }
-  
+
   list(
     decision = decision,
     message = conclusion,
@@ -519,6 +513,9 @@ aardl <- function(formula, data, p = 1, q = 1, case = 3,
 }
 
 
+#' @rdname aardl
+#' @param x,object An object of class "aardl"
+#' @param ... Not used
 #' @export
 print.aardl <- function(x, ...) {
   cat("\n")
@@ -542,6 +539,7 @@ print.aardl <- function(x, ...) {
 }
 
 
+#' @rdname aardl
 #' @export
 summary.aardl <- function(object, ...) {
   cat("\n")
@@ -566,21 +564,35 @@ summary.aardl <- function(object, ...) {
     cat(sprintf("  %-25s %10.4f\n", "F_ind (indep. variables):", object$F_ind))
   }
   
-  cat("\nCritical Values (5% level):\n")
-  cat("-----------------------------------------------\n")
   if (object$conclusion$method == "bootstrap") {
-    cat("  Bootstrap critical values used\n")
-    cat(sprintf("  F: %8.4f\n", object$boot_results$cv_F["95%"]))
-    cat(sprintf("  t: %8.4f\n", object$boot_results$cv_t["5%"]))
+    br <- object$boot_results
+    eng <- br$engine
+    cat("\nBootstrap (", if (eng$settings$nulls == "separate")
+      "separate nulls, Bertelli, Vacca and Zoia 2022" else
+        "Fov null for all statistics, McNown, Sam and Goh 2018, conditional ECM", "), ", eng$settings$B,
+      " replications\n", sep = "")
+    cat("-----------------------------------------------\n")
+    cat(sprintf("  %-8s %9s %9s %9s\n", "", "p-value", "5% cv", "valid"))
+    cat(sprintf("  %-8s %9.4f %9.4f %9d\n", "F_pss", eng$p_value["Fov"], br$cv_F["95%"], eng$n_valid["Fov"]))
+    cat(sprintf("  %-8s %9.4f %9.4f %9d\n", "t_dep", eng$p_value["t"], br$cv_t["5%"], eng$n_valid["t"]))
+    if (!is.na(object$F_ind))
+      cat(sprintf("  %-8s %9.4f %9.4f %9d\n", "F_ind", eng$p_value["Find"], br$cv_F_ind["95%"], eng$n_valid["Find"]))
   } else {
-    cat(sprintf("  F: I(0) = %.3f, I(1) = %.3f\n", 
+    if (object$conclusion$method == "none") {
+      cat("\nBounds for the model without Fourier terms; not valid with\n")
+      cat("Fourier terms (reference only, 5% level):\n")
+    } else {
+      cat("\nKripfganz and Schneider (2020) bounds (5% level):\n")
+    }
+    cat("-----------------------------------------------\n")
+    cat(sprintf("  F: I(0) = %.3f, I(1) = %.3f\n",
                 object$critical_values$F$I0["95%"],
                 object$critical_values$F$I1["95%"]))
     cat(sprintf("  t: I(0) = %.3f, I(1) = %.3f\n",
                 object$critical_values$t$I0["95%"],
                 object$critical_values$t$I1["95%"]))
   }
-  
+
   cat("\nLong-Run Coefficients:\n")
   cat("-----------------------------------------------\n")
   print(round(object$long_run, 4))

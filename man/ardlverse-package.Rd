@@ -17,7 +17,11 @@ for modeling smooth structural breaks.
 The main functions are:
 \itemize{
   \item \code{\link{panel_ardl}}: Panel ARDL with PMG, MG, DFE estimators
-  \item \code{\link{boot_ardl}}: Bootstrap ARDL bounds test
+  \item \code{\link{boot_ardl}}: Bootstrap ARDL bounds test (recursive
+    bootstrap of Bertelli, Vacca and Zoia, 2022, or McNown, Sam and Goh, 2018)
+  \item \code{\link{aardl}}: Augmented ARDL bounds test
+  \item \code{\link{mtnardl}}: Multiple-threshold nonlinear ARDL
+  \item \code{\link{fbnardl}}: Fourier (bootstrap) nonlinear ARDL
   \item \code{\link{qnardl}}: Quantile Nonlinear ARDL
   \item \code{\link{fourier_ardl}}: Fourier ARDL for structural breaks
   \item \code{\link{ardl_diagnostics}}: Comprehensive model diagnostics
@@ -44,19 +48,19 @@ Muhammad Abdullah Alkhalaf <muhammedalkhalaf@gmail.com>
 Maintainer: Muhammad Abdullah Alkhalaf <muhammedalkhalaf@gmail.com>
 }
 \references{
-Pesaran, M. H., Shin, Y., & Smith, R. P. (1999). Pooled mean group estimation
+Pesaran, M. H., Shin, Y. and Smith, R. P. (1999). Pooled mean group estimation
 of dynamic heterogeneous panels. Journal of the American Statistical Association.
 
-Pesaran, M. H., Shin, Y., & Smith, R. J. (2001). Bounds testing approaches
+Pesaran, M. H., Shin, Y. and Smith, R. J. (2001). Bounds testing approaches
 to the analysis of level relationships. Journal of Applied Econometrics.
 
-Shin, Y., Yu, B., & Greenwood-Nimmo, M. (2014). Modelling asymmetric
+Shin, Y., Yu, B. and Greenwood-Nimmo, M. (2014). Modelling asymmetric
 cointegration and dynamic multipliers in a nonlinear ARDL framework.
 
-Cho, J. S., Kim, T. H., & Shin, Y. (2015). Quantile cointegration in the
+Cho, J. S., Kim, T. H. and Shin, Y. (2015). Quantile cointegration in the
 autoregressive distributed-lag modeling framework. Journal of Econometrics.
 
-Banerjee, P., Arcabic, V., & Lee, H. (2017). Fourier ADL cointegration test.
+Banerjee, P., Arcabic, V. and Lee, H. (2017). Fourier ADL cointegration test.
 Economic Modelling.
 }
 \keyword{package}
@@ -70,7 +74,7 @@ summary(model)
 
 # Bootstrap bounds test
 ts_data <- generate_ts_data()
-boot <- boot_ardl(gdp ~ investment, data = ts_data, nboot = 1000)
+boot <- boot_ardl(gdp ~ investment, data = ts_data, nboot = 99, seed = 1)
 summary(boot)
 
 # QNARDL

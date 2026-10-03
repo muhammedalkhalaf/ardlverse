@@ -4,8 +4,8 @@
 #'
 #' @details
 #' This function implements the QNARDL model which extends the NARDL framework
-#' of Shin, Yu & Greenwood-Nimmo (2014) to a quantile regression setting,
-#' combining it with the QARDL approach of Cho, Kim & Shin (2015).
+#' of Shin, Yu and Greenwood-Nimmo (2014) to a quantile regression setting,
+#' combining it with the QARDL approach of Cho, Kim and Shin (2015).
 #'
 #' The model allows for:
 #' \itemize{
@@ -43,11 +43,11 @@
 #' }
 #'
 #' @references
-#' Cho, J. S., Kim, T. H., & Shin, Y. (2015). Quantile cointegration in the
+#' Cho, J. S., Kim, T. H. and Shin, Y. (2015). Quantile cointegration in the
 #' autoregressive distributed-lag modeling framework. Journal of Econometrics,
 #' 188(1), 281-300.
 #'
-#' Shin, Y., Yu, B., & Greenwood-Nimmo, M. (2014). Modelling asymmetric
+#' Shin, Y., Yu, B. and Greenwood-Nimmo, M. (2014). Modelling asymmetric
 #' cointegration and dynamic multipliers in a nonlinear ARDL framework.
 #' In Festschrift in Honor of Peter Schmidt (pp. 281-314). Springer.
 #'

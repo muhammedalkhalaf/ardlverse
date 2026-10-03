@@ -21,13 +21,16 @@
 .onAttach <- function(libname, pkgname) {
   packageStartupMessage(
     "====================================================================\n",
-    "                        ardlverse v1.0.0\n",
+    "                        ardlverse v", getNamespaceVersion(pkgname), "\n",
     "====================================================================\n",
     " Comprehensive ARDL Modeling Framework\n",
     "--------------------------------------------------------------------\n",
     " Components:\n",
     "   - panel_ardl()     : Panel ARDL (PMG, MG, DFE)\n",
     "   - boot_ardl()      : Bootstrap Bounds Test\n",
+    "   - aardl()          : Augmented ARDL\n",
+    "   - mtnardl()        : Multiple-Threshold NARDL\n",
+    "   - fbnardl()        : Fourier (Bootstrap) NARDL\n",
     "   - qnardl()         : Quantile Nonlinear ARDL\n",
     "   - fourier_ardl()   : Fourier ARDL\n",
     "   - ardl_diagnostics(): Model Diagnostics\n",

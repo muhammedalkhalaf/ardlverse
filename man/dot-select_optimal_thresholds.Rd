@@ -4,9 +4,12 @@
 \alias{.select_optimal_thresholds}
 \title{Select Optimal Thresholds}
 \usage{
-.select_optimal_thresholds(y, X, n_thresholds, p, q, case)
+.select_optimal_thresholds(y, X, n_thresholds, p, q, case, x_vars, decompose)
 }
 \description{
-Select Optimal Thresholds
+With one threshold, the value minimising the AIC of the
+  MT-NARDL model over 0 and the deciles of the changes of the first
+  decomposed variable; with more, equally spaced quantiles of those
+  changes.
 }
 \keyword{internal}

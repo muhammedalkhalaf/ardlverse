@@ -1,22 +1,59 @@
 #' @title Bootstrap ARDL Bounds Test
-#' @description Perform bounds test for cointegration with bootstrap critical values
+#' @description Bounds test for cointegration in an ARDL model with bootstrap
+#'   critical values from a recursive bootstrap under the null hypothesis.
 #'
 #' @details
-#' This function implements bootstrap-based inference for the ARDL bounds test,
-#' which is particularly useful for small samples where asymptotic critical values
-#' may be unreliable. The bootstrap procedure follows McNown, Sam & Goh (2018).
-#'
-#' Three test statistics are computed:
+#' The model is the conditional error correction form of the ARDL(p, q)
+#' model of Pesaran, Shin and Smith (2001):
+#' \deqn{\Delta y_t = c + \rho y_{t-1} + \theta' x_{t-1} +
+#'   \sum_{i=1}^{p-1}\phi_i \Delta y_{t-i} + \sum_{j=0}^{q}\pi_j' \Delta x_{t-j} + u_t.}
+#' Three statistics are computed:
 #' \itemize{
-#'   \item \strong{F-statistic}: Joint test that all level coefficients are zero
-#'   \item \strong{t-statistic}: Test that the error correction coefficient is zero
-#'   \item \strong{F-overall}: Joint test including the dependent variable lag
+#'   \item \strong{Fov} (\code{F_stat}): F test that \eqn{\rho} and
+#'     \eqn{\theta} are jointly zero (with the intercept in case 2 and the
+#'     trend in case 4). \code{F_overall} is the same statistic and is kept
+#'     for backward compatibility.
+#'   \item \strong{t} (\code{t_stat}): t test that \eqn{\rho = 0}.
+#'   \item \strong{Find} (\code{Find_stat}): F test that \eqn{\theta = 0}
+#'     (McNown, Sam and Goh, 2018).
 #' }
 #'
-#' @param formula A formula specifying the model: gdp ~ investment + trade + ...
-#' @param data A data frame containing the time series data
-#' @param p Integer. Number of lags for dependent variable (default: 1)
-#' @param q Integer or vector. Number of lags for independent variables (default: 1)
+#' The bootstrap is recursive: y* and x* are generated from the estimated
+#' model, observation by observation, with resampled residual pairs, and the
+#' three statistics are recomputed with the same design on each bootstrap
+#' sample. With \code{nulls = "separate"} (default) the procedure follows
+#' Bertelli, Vacca and Zoia (2022, Section 3): each statistic has its own
+#' restricted model (eqs. 16-18), x* is generated from the marginal model of
+#' \eqn{\Delta x_t} on \eqn{x_{t-1}} and lagged differences (eqs. 19-20),
+#' the residuals are recentred after each draw (eqs. 21-22) and the initial
+#' values are a random block of the data. With \code{nulls = "joint"} the
+#' null of the Fov test generates the samples for all statistics (McNown,
+#' Sam and Goh, 2018, Steps 1-8) applied to the conditional ECM above, which
+#' is a package choice (MSG write the y equation without the contemporaneous
+#' \eqn{\Delta x_t}); \eqn{\Delta x_t} follows the unrestricted equation
+#' that also contains \eqn{y_{t-1}}, the residuals are recentred once (MSG
+#' eq. 13 subtracts the residual mean; no rescaling) and the initial values
+#' are the first observations. The x equation has \code{p - 1} lags of
+#' \eqn{\Delta y} and \eqn{\Delta x}, as in BVZ eq. 19.
+#' Bertelli, Vacca and Zoia (2022) treat cases 2 and 3; cases 1, 4 and 5
+#' are handled by the same algorithm with the deterministic terms of the
+#' case (the intercept or trend is restricted under the Fov null in cases 2
+#' and 4), which is a package choice.
+#'
+#' Critical values are order statistics of the bootstrap distributions (BVZ
+#' eqs. 24-25). Cointegration is concluded only when Fov, t and Find all
+#' reject; Fov rejecting without t is reported as the degenerate case of the
+#' first type and Fov and t rejecting without Find as the degenerate case of
+#' the second type (Pesaran, Shin and Smith, 2001; McNown, Sam and Goh,
+#' 2018).
+#'
+#' @param formula A formula such as \code{gdp ~ investment + trade}; only
+#'   plain variable names are accepted.
+#' @param data A data frame containing the time series (no missing values).
+#' @param p Integer. ARDL order of the dependent variable; the model has
+#'   \code{p - 1} lagged differences of y (default: 1)
+#' @param q Integer or vector. Lags of the differenced regressors: lags
+#'   0 to \code{q} enter the model (default: 1)
 #' @param case Integer from 1-5 specifying deterministic components:
 #'   \itemize{
 #'     \item 1: No intercept, no trend
@@ -26,45 +63,56 @@
 #'     \item 5: Unrestricted intercept, unrestricted trend
 #'   }
 #' @param nboot Number of bootstrap replications (default: 2000)
-#' @param seed Random seed for reproducibility (default: NULL)
-#' @param parallel Logical. Use parallel processing (default: FALSE
-#' @param ncores Number of cores for parallel processing (default: 2)
+#' @param seed Random seed (default: NULL). The seed is used locally and the
+#'   random number generator state of the session is restored afterwards.
+#' @param parallel Deprecated and ignored (the bootstrap runs serially).
+#' @param ncores Deprecated and ignored.
+#' @param nulls \code{"separate"} (default; Bertelli, Vacca and Zoia, 2022) or
+#'   \code{"joint"} (Fov null for all statistics, McNown, Sam and Goh,
+#'   2018, applied to the conditional ECM); see Details.
+#' @param xmodel Model generating \eqn{\Delta x^*}: \code{"vecm"} (default
+#'   with separate nulls), \code{"var"} (default with the joint null) or
+#'   \code{"rw"} (random walk with the deterministic terms).
+#' @param level Significance level of the decision (default: 0.05).
 #'
 #' @return An object of class "boot_ardl" containing:
 #' \itemize{
-#'   \item \code{F_stat}: F-statistic for bounds test
-#'   \item \code{t_stat}: t-statistic for EC coefficient
-#'   \item \code{F_overall}: Overall F-statistic
-#'   \item \code{boot_F}: Bootstrap distribution of F-statistics
-#'   \item \code{boot_t}: Bootstrap distribution of t-statistics
-#'   \item \code{cv_F}: Critical values for F-test (90%, 95%, 99%)
-#'   \item \code{cv_t}: Critical values for t-test
-#'   \item \code{p_value_F}: Bootstrap p-value for F-test
-#'   \item \code{p_value_t}: Bootstrap p-value for t-test
-#'   \item \code{model}: The estimated ARDL model
-#'   \item \code{conclusion}: Test conclusion
+#'   \item \code{F_stat}, \code{t_stat}, \code{Find_stat}: the statistics;
+#'     \code{F_overall} equals \code{F_stat}
+#'   \item \code{boot_F}, \code{boot_t}, \code{boot_Find}: bootstrap
+#'     distributions (failed replications are \code{NA})
+#'   \item \code{cv_F}, \code{cv_t}, \code{cv_Find}: bootstrap critical values
+#'     at the 10\%, 5\%, 2.5\% and 1\% levels
+#'   \item \code{p_value_F}, \code{p_value_t}, \code{p_value_Find}: bootstrap
+#'     p-values
+#'   \item \code{decision}: one of \code{"COINTEGRATION"},
+#'     \code{"NO_COINTEGRATION"}, \code{"DEGENERATE_1"},
+#'     \code{"DEGENERATE_2"}, \code{"UNDETERMINED"}
+#'   \item \code{conclusion}: a text version of the decision
+#'   \item \code{model}: the estimated ARDL model
+#'   \item \code{engine}: the full output of the bootstrap engine (including
+#'     the number of valid replications and the reproduction check)
 #' }
 #'
 #' @references
-#' McNown, R., Sam, C. Y., & Goh, S. K. (2018). Bootstrapping the autoregressive
-#' distributed lag test for cointegration. Applied Economics, 50(13), 1509-1521.
+#' Bertelli, S., Vacca, G. and Zoia, M. (2022). Bootstrap cointegration
+#' tests in ARDL models. \emph{Economic Modelling}, 116, 105987.
+#' \doi{10.1016/j.econmod.2022.105987}
 #'
-#' Pesaran, M. H., Shin, Y., & Smith, R. J. (2001). Bounds testing approaches
-#' to the analysis of level relationships. Journal of Applied Econometrics, 16(3), 289-326.
+#' McNown, R., Sam, C. Y. and Goh, S. K. (2018). Bootstrapping the
+#' autoregressive distributed lag test for cointegration. \emph{Applied
+#' Economics}, 50(13), 1509-1521. \doi{10.1080/00036846.2017.1366643}
+#'
+#' Pesaran, M. H., Shin, Y. and Smith, R. J. (2001). Bounds testing
+#' approaches to the analysis of level relationships. \emph{Journal of
+#' Applied Econometrics}, 16(3), 289-326. \doi{10.1002/jae.616}
 #'
 #' @examples
-#' \donttest{
-#' # Load example data
 #' data(macro_data)
-#'
-#' # Bootstrap bounds test
-#' boot_test <- boot_ardl(
-#'   gdp ~ inflation + investment + trade,
-#'   data = macro_data,
-#'   p = 2, q = 2,
-#'   case = 3,
-#'   nboot = 2000
-#' )
+#' boot_test <- boot_ardl(gdp ~ inflation, data = macro_data[1:60, ],
+#'                        p = 2, q = 1, nboot = 49, seed = 1)
+#' boot_test
+#' \donttest{
 #' summary(boot_test)
 #' plot(boot_test)
 #' }
@@ -72,77 +120,80 @@
 #' @export
 #' @importFrom stats lm coef residuals fitted var rnorm quantile
 boot_ardl <- function(formula, data, p = 1, q = 1, case = 3,
-                      nboot = 2000, seed = NULL, 
-                      parallel = FALSE, ncores = 2) {
-  
-  # Set seed if provided
-  if (!is.null(seed)) set.seed(seed)
-  
-  # Validate inputs
+                      nboot = 2000, seed = NULL,
+                      parallel = FALSE, ncores = 2,
+                      nulls = c("separate", "joint"), xmodel = NULL,
+                      level = 0.05) {
+
+  nulls <- match.arg(nulls)
   if (!case %in% 1:5) {
     stop("'case' must be an integer from 1 to 5")
   }
-  
-  # Parse formula
-  formula_vars <- all.vars(formula)
-  y_var <- formula_vars[1]
-  x_vars <- formula_vars[-1]
+  if (isTRUE(parallel))
+    warning("'parallel' is deprecated and ignored; the bootstrap runs serially",
+            call. = FALSE)
+  if (is.null(xmodel)) xmodel <- if (nulls == "separate") "vecm" else "var"
+  xmodel <- match.arg(xmodel, c("vecm", "var", "rw"))
+  if (p < 1) stop("'p' must be at least 1")
+
+  fv <- .ardl_formula_vars(formula, data)
+  y_var <- fv$y_var
+  x_vars <- fv$x_vars
   k <- length(x_vars)
-  
-  # Handle q as vector or scalar
-  if (length(q) == 1) {
-    q <- rep(q, k)
-  }
-  
-  # Prepare data
+  if (length(q) == 1) q <- rep(q, k)
+  if (length(q) != k) stop("'q' must have length 1 or one entry per regressor")
+  if (any(q < 0)) stop("'q' must be non-negative")
+
   ardl_data <- .prepare_ardl_ts_data(data, y_var, x_vars, p, q, case)
-  
   if (is.null(ardl_data)) {
     stop("Insufficient observations for specified lag structure")
   }
-  
-  # Estimate unrestricted ARDL model
   model_ur <- .estimate_ardl_unrestricted(ardl_data, case)
-  
-  # Estimate restricted model (no levels)
   model_r <- .estimate_ardl_restricted(ardl_data, case)
-  
-  # Compute test statistics
   F_stat <- .compute_F_stat(model_ur, model_r, k, case)
   t_stat <- .compute_t_stat(model_ur)
-  F_overall <- .compute_F_overall(model_ur, model_r, k, case)
-  
-  # Bootstrap procedure
-  boot_results <- .bootstrap_bounds(
-    ardl_data, model_ur, case, k, nboot, parallel, ncores
-  )
-  
-  # Critical values from bootstrap distribution
-  cv_F <- quantile(boot_results$F_boot, probs = c(0.90, 0.95, 0.99))
-  cv_t <- quantile(boot_results$t_boot, probs = c(0.10, 0.05, 0.01))
-  
-  # P-values
-  p_value_F <- mean(boot_results$F_boot >= F_stat)
-  p_value_t <- mean(boot_results$t_boot <= t_stat)
-  
-  # Conclusion
-  conclusion <- .bounds_conclusion(F_stat, t_stat, cv_F, cv_t, k, case)
-  
+  F_overall <- F_stat
+
+  y <- data[[y_var]]
+  X <- as.matrix(data[, x_vars, drop = FALSE])
+  t0 <- max(3, p + 1, max(q) + 2)
+  stat_fun <- function(yy, xx, spec) .boot_ardl_stats(yy, xx, x_vars, p, q, case)
+  eng <- .ardl_boot_engine(y, X, p = p - 1, q = q, case = case, t0 = t0,
+                           nulls = nulls, xmodel = xmodel, B = nboot,
+                           init = if (nulls == "separate") "block" else "observed",
+                           recentre = if (nulls == "separate") "draw" else "once",
+                           stat_fun = stat_fun, use_find = TRUE, level = level,
+                           seed = seed)
+  Find_stat <- unname(eng$statistic["Find"])
+  cvn <- c("90%", "95%", "97.5%", "99%")
+  cv_F <- stats::setNames(eng$cv[, "Fov"], cvn)
+  cv_t <- stats::setNames(eng$cv[, "t"], c("10%", "5%", "2.5%", "1%"))
+  cv_Find <- stats::setNames(eng$cv[, "Find"], cvn)
+
   result <- list(
     F_stat = F_stat,
     t_stat = t_stat,
+    Find_stat = Find_stat,
     F_overall = F_overall,
-    boot_F = boot_results$F_boot,
-    boot_t = boot_results$t_boot,
+    boot_F = eng$boot[, "Fov"],
+    boot_t = eng$boot[, "t"],
+    boot_Find = eng$boot[, "Find"],
     cv_F = cv_F,
     cv_t = cv_t,
-    p_value_F = p_value_F,
-    p_value_t = p_value_t,
+    cv_Find = cv_Find,
+    p_value_F = unname(eng$p_value["Fov"]),
+    p_value_t = unname(eng$p_value["t"]),
+    p_value_Find = unname(eng$p_value["Find"]),
+    decision = eng$decision,
+    conclusion = eng$label,
+    level = level,
     model = model_ur,
     case = case,
     k = k,
     nboot = nboot,
-    conclusion = conclusion,
+    nulls = nulls,
+    xmodel = xmodel,
+    engine = eng,
     call = match.call(),
     formula = formula,
     y_var = y_var,
@@ -150,9 +201,37 @@ boot_ardl <- function(formula, data, p = 1, q = 1, case = 3,
     p = p,
     q = q
   )
-  
+
   class(result) <- c("boot_ardl", "list")
   return(result)
+}
+
+
+#' @title Statistics of boot_ardl on a (bootstrap) sample
+#' @description Fov, t and Find with the design of boot_ardl().
+#' @keywords internal
+.boot_ardl_stats <- function(y, X, x_vars, p, q, case) {
+  d <- data.frame(y, X)
+  names(d) <- c(".y_dep", x_vars)
+  ad <- .prepare_ardl_ts_data(d, ".y_dep", x_vars, p, q, case)
+  Z <- as.matrix(ad[, -1, drop = FALSE])
+  dy <- ad$dy
+  lv <- attr(ad, "level_vars")
+  f <- stats::lm.fit(Z, dy)
+  if (f$rank < ncol(Z)) stop("rank-deficient design")
+  rss <- sum(f$residuals^2)
+  df <- length(dy) - ncol(Z)
+  Ftest <- function(drop) {
+    keep <- setdiff(colnames(Z), drop)
+    rss_r <- if (length(keep)) sum(stats::lm.fit(Z[, keep, drop = FALSE], dy)$residuals^2) else sum(dy^2)
+    ((rss_r - rss) / length(drop)) / (rss / df)
+  }
+  piv <- order(f$qr$pivot)
+  XtXi <- chol2inv(f$qr$qr[seq_len(ncol(Z)), seq_len(ncol(Z)), drop = FALSE])[piv, piv]
+  iy <- which(colnames(Z) == "y_lag1")
+  c(Fov = Ftest(c(lv, if (case == 2) "const", if (case == 4) "trend")),
+    t = unname(f$coefficients[iy] / sqrt(rss / df * XtXi[iy, iy])),
+    Find = Ftest(setdiff(lv, "y_lag1")))
 }
 
 
@@ -321,76 +400,6 @@ boot_ardl <- function(formula, data, p = 1, q = 1, case = 3,
 }
 
 
-#' @title Bootstrap Bounds Test
-#' @keywords internal
-.bootstrap_bounds <- function(ardl_data, model_ur, case, k, nboot, parallel, ncores) {
-  
-  # Fixed-regressor residual bootstrap under the null: the restricted model
-  # (no lagged levels) generates the bootstrap samples
-  model_r <- .estimate_ardl_restricted(ardl_data, case)
-  resid_r <- residuals(model_r)
-  fitted_r <- fitted(model_r)
-  n <- length(resid_r)
-  resid_centered <- resid_r - mean(resid_r)
-
-  boot_one <- function(b) {
-    boot_resid <- sample(resid_centered, n, replace = TRUE)
-    ardl_boot <- ardl_data
-    ardl_boot$dy <- fitted_r + boot_resid
-
-    # Re-estimate models
-    tryCatch({
-      model_ur_boot <- .estimate_ardl_unrestricted(ardl_boot, case)
-      model_r_boot <- .estimate_ardl_restricted(ardl_boot, case)
-      
-      F_boot <- .compute_F_stat(model_ur_boot, model_r_boot, k, case)
-      t_boot <- .compute_t_stat(model_ur_boot)
-      
-      c(F_boot, t_boot)
-    }, error = function(e) {
-      c(NA, NA)
-    })
-  }
-  
-  # Run bootstrap
-  if (parallel && requireNamespace("parallel", quietly = TRUE)) {
-    cl <- parallel::makeCluster(ncores)
-    on.exit(parallel::stopCluster(cl))
-    
-    boot_stats <- parallel::parSapply(cl, 1:nboot, boot_one)
-  } else {
-    boot_stats <- sapply(1:nboot, boot_one)
-  }
-  
-  list(
-    F_boot = boot_stats[1, ],
-    t_boot = boot_stats[2, ]
-  )
-}
-
-
-#' @title Bounds Test Conclusion
-#' @keywords internal
-.bounds_conclusion <- function(F_stat, t_stat, cv_F, cv_t, k, case) {
-  
-  # Compare with 95% critical value
-  cv_F_95 <- cv_F["95%"]
-  cv_t_95 <- cv_t["5%"]
-  
-  if (F_stat > cv_F_95 && t_stat < cv_t_95) {
-    conclusion <- "COINTEGRATION: Both F and t statistics significant at 5% level"
-  } else if (F_stat > cv_F_95) {
-    conclusion <- "COINTEGRATION: F-statistic significant at 5% level"
-  } else if (t_stat < cv_t_95) {
-    conclusion <- "COINTEGRATION: t-statistic significant at 5% level"
-  } else {
-    conclusion <- "NO COINTEGRATION: Cannot reject null hypothesis"
-  }
-  
-  return(conclusion)
-}
-
-
 #' @title Critical Value Bounds for the PSS Bounds Test
 #' @description Critical value bounds for the F and t statistics of the
 #'   Pesaran, Shin and Smith (2001) bounds test, computed from the response
@@ -448,20 +457,22 @@ pss_critical_values <- function(k, case = 3, level = "5%", n = NULL, sr = 0) {
 
 
 #' @title Summary method for boot_ardl
+#' @param object An object of class "boot_ardl"
+#' @param ... Not used
 #' @export
 summary.boot_ardl <- function(object, ...) {
-  
+
   cat("\n")
   cat("====================================================================\n")
   cat("     Bootstrap ARDL Bounds Test for Cointegration\n")
   cat("====================================================================\n\n")
-  
+
   cat("Call:\n")
   print(object$call)
   cat("\n")
-  
+
   cat("Model: ARDL(", object$p, ", ", paste(object$q, collapse = ", "), ")\n", sep = "")
-  cat("Case:  ", object$case, " (", 
+  cat("Case:  ", object$case, " (",
       switch(object$case,
              "1" = "No intercept, no trend",
              "2" = "Restricted intercept, no trend",
@@ -470,59 +481,61 @@ summary.boot_ardl <- function(object, ...) {
              "5" = "Unrestricted intercept, unrestricted trend"),
       ")\n", sep = "")
   cat("Regressors (k):", object$k, "\n")
-  cat("Bootstrap replications:", object$nboot, "\n\n")
-  
+  nulls <- if (is.null(object$nulls)) "separate" else object$nulls
+  cat("Bootstrap:", if (nulls == "separate")
+    "separate nulls (Bertelli, Vacca and Zoia, 2022)" else
+      "Fov null for all statistics (McNown, Sam and Goh, 2018, Steps 1-8)\n  applied to the conditional ECM (package choice)", "\n")
+  cat("Replications:", object$nboot, " valid (Fov, t, Find):",
+      paste(object$engine$n_valid, collapse = ", "), "\n\n")
+
   cat("--------------------------------------------------------------------\n")
-  cat("                     Test Statistics\n")
-  cat("--------------------------------------------------------------------\n\n")
-  
-  # F-test results
-  cat("F-statistic:", round(object$F_stat, 4), "\n")
-  cat("Bootstrap critical values:\n")
-  cat("  90%:", round(object$cv_F["90%"], 4), "\n")
-  cat("  95%:", round(object$cv_F["95%"], 4), "\n")
-  cat("  99%:", round(object$cv_F["99%"], 4), "\n")
-  cat("Bootstrap p-value:", round(object$p_value_F, 4), "\n\n")
-  
-  # t-test results
-  cat("t-statistic:", round(object$t_stat, 4), "\n")
-  cat("Bootstrap critical values:\n")
-  cat("  90%:", round(object$cv_t["10%"], 4), "\n")
-  cat("  95%:", round(object$cv_t["5%"], 4), "\n")
-  cat("  99%:", round(object$cv_t["1%"], 4), "\n")
-  cat("Bootstrap p-value:", round(object$p_value_t, 4), "\n\n")
-  
-  # PSS asymptotic bounds for comparison
+  cat("            Statistic   p-value      10%       5%     2.5%       1%\n")
+  cat("--------------------------------------------------------------------\n")
+  row <- function(nm, st, pv, cv)
+    cat(sprintf("%-10s %10.4f %9.4f %8.3f %8.3f %8.3f %8.3f\n",
+                nm, st, pv, cv[1], cv[2], cv[3], cv[4]))
+  row("Fov", object$F_stat, object$p_value_F, object$cv_F)
+  row("t", object$t_stat, object$p_value_t, object$cv_t)
+  if (!is.null(object$Find_stat))
+    row("Find", object$Find_stat, object$p_value_Find, object$cv_Find)
+  cat("Critical values are bootstrap order statistics; reject for Fov and\n")
+  cat("Find above, and for t below, the critical value.\n\n")
+
   pss <- pss_critical_values(object$k, object$case, "5%")
   cat("--------------------------------------------------------------------\n")
-  cat("  PSS bounds, asymptotic, Kripfganz and Schneider (2020), 5% level\n")
+  cat("  For reference: PSS asymptotic bounds, Kripfganz and Schneider\n")
+  cat("  (2020), 5% level\n")
   cat("--------------------------------------------------------------------\n")
-  cat("F-bounds: I(0) =", round(pss$F_bounds$I0, 2), 
+  cat("F-bounds: I(0) =", round(pss$F_bounds$I0, 2),
       ", I(1) =", round(pss$F_bounds$I1, 2), "\n")
   cat("t-bounds: I(0) =", round(pss$t_bounds$I0, 2),
       ", I(1) =", round(pss$t_bounds$I1, 2), "\n\n")
-  
+
   cat("--------------------------------------------------------------------\n")
-  cat("                      Conclusion\n")
+  cat("  Decision at the ", 100 * object$level,
+      "% level (Fov, t and Find must all reject)\n", sep = "")
   cat("--------------------------------------------------------------------\n")
   cat(object$conclusion, "\n")
   cat("====================================================================\n")
-  
+
   invisible(object)
 }
 
 
 #' @title Print method for boot_ardl
+#' @param x An object of class "boot_ardl"
+#' @param ... Not used
 #' @export
 print.boot_ardl <- function(x, ...) {
-  
+
   cat("\nBootstrap ARDL Bounds Test\n")
-  cat("F-statistic:", round(x$F_stat, 4), 
-      "(p-value:", round(x$p_value_F, 4), ")\n")
-  cat("t-statistic:", round(x$t_stat, 4),
-      "(p-value:", round(x$p_value_t, 4), ")\n")
+  cat("Fov :", round(x$F_stat, 4), "(bootstrap p-value:", round(x$p_value_F, 4), ")\n")
+  cat("t   :", round(x$t_stat, 4), "(bootstrap p-value:", round(x$p_value_t, 4), ")\n")
+  if (!is.null(x$Find_stat))
+    cat("Find:", round(x$Find_stat, 4), "(bootstrap p-value:",
+        round(x$p_value_Find, 4), ")\n")
   cat("\n", x$conclusion, "\n")
-  
+
   invisible(x)
 }
 
@@ -544,7 +557,7 @@ plot.boot_ardl <- function(x, which = "both", ...) {
   plots <- list()
   
   if (which %in% c("F", "both")) {
-    df_F <- data.frame(F_stat = x$boot_F)
+    df_F <- data.frame(F_stat = x$boot_F[!is.na(x$boot_F)])
     
     p1 <- ggplot2::ggplot(df_F, ggplot2::aes(x = F_stat)) +
       ggplot2::geom_histogram(ggplot2::aes(y = ggplot2::after_stat(density)),
@@ -557,7 +570,7 @@ plot.boot_ardl <- function(x, which = "both", ...) {
       ggplot2::labs(
         title = "Bootstrap Distribution of F-statistic",
         subtitle = paste("Observed F =", round(x$F_stat, 3),
-                        "| 95% CV =", round(x$cv_F["95%"], 3)),
+                        "| 5% CV =", round(x$cv_F["95%"], 3)),
         x = "F-statistic",
         y = "Density"
       ) +
@@ -584,7 +597,7 @@ plot.boot_ardl <- function(x, which = "both", ...) {
       ggplot2::labs(
         title = "Bootstrap Distribution of t-statistic",
         subtitle = paste("Observed t =", round(x$t_stat, 3),
-                        "| 95% CV =", round(x$cv_t["5%"], 3)),
+                        "| 5% CV =", round(x$cv_t["5%"], 3)),
         x = "t-statistic",
         y = "Density"
       ) +

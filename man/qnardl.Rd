@@ -34,7 +34,7 @@ qnardl(formula, data, tau = c(0.25, 0.5, 0.75),
 }
 \details{
 This function implements the QNARDL model which extends the NARDL framework
-of Shin, Yu & Greenwood-Nimmo (2014) to a quantile regression setting.
+of Shin, Yu and Greenwood-Nimmo (2014) to a quantile regression setting.
 
 The model allows for:
 \itemize{
@@ -58,11 +58,11 @@ An object of class "qnardl" containing:
 \item{tau}{Quantiles estimated}
 }
 \references{
-Cho, J. S., Kim, T. H., & Shin, Y. (2015). Quantile cointegration in the
+Cho, J. S., Kim, T. H. and Shin, Y. (2015). Quantile cointegration in the
 autoregressive distributed-lag modeling framework. Journal of Econometrics,
 188(1), 281-300.
 
-Shin, Y., Yu, B., & Greenwood-Nimmo, M. (2014). Modelling asymmetric
+Shin, Y., Yu, B. and Greenwood-Nimmo, M. (2014). Modelling asymmetric
 cointegration and dynamic multipliers in a nonlinear ARDL framework.
 In Festschrift in Honor of Peter Schmidt (pp. 281-314). Springer.
 }

@@ -1,5 +1,5 @@
 # Replication test: validates panel_ardl PMG/MG/DFE outputs against
-# Stata's xtpmg, using the Blackburne & Frank (2007) Stata Journal example.
+# Stata's xtpmg, using the Blackburne and Frank (2007) Stata Journal example.
 #
 # Contributed by Yeleazar Levchenko (Kyiv School of Economics).
 #

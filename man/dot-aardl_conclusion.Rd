@@ -4,9 +4,12 @@
 \alias{.aardl_conclusion}
 \title{AARDL Conclusion}
 \usage{
-.aardl_conclusion(F_pss, t_dep, F_ind, cv, boot = NULL)
+.aardl_conclusion(F_pss, t_dep, F_ind, cv, boot = NULL, fourier = FALSE)
 }
 \description{
-AARDL Conclusion
+Bootstrap decision (F_pss, t_dep and F_ind must all reject;
+  degenerate cases labelled), Kripfganz and Schneider (2020) bounds
+  decision for the models without Fourier terms, and no decision for the
+  Fourier models without bootstrap.
 }
 \keyword{internal}

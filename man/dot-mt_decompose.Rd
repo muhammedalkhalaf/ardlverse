@@ -7,6 +7,9 @@
 .mt_decompose(X, thresholds)
 }
 \description{
-Multiple-Threshold Decomposition
+Regime partial sums: regime r of a column collects its change
+  when it lies between thresholds r - 1 (excluded) and r (included), with the change at the first observation
+  set to zero. \code{thresholds} is a numeric vector used for every
+  column, or a list with one vector per column.
 }
 \keyword{internal}

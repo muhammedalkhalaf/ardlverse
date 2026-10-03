@@ -41,7 +41,7 @@
 #' }
 #'
 #' @references
-#' Pesaran, M. H., Shin, Y., & Smith, R. J. (2001). Bounds testing approaches
+#' Pesaran, M. H., Shin, Y. and Smith, R. J. (2001). Bounds testing approaches
 #' to the analysis of level relationships. Journal of Applied Econometrics, 16(3), 289-326.
 #'
 #' @examples

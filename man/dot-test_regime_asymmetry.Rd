@@ -4,16 +4,12 @@
 \alias{.test_regime_asymmetry}
 \title{Test Regime Asymmetry}
 \usage{
-.test_regime_asymmetry(
-  coefs,
-  vcov_mat,
-  x_vars,
-  regime_names,
-  thresholds,
-  k_total
-)
+.test_regime_asymmetry(coefs, vcov_mat, lr_coefs, VL, fit, decompose)
 }
 \description{
-Test Regime Asymmetry
+Pairwise and joint Wald tests of equal level coefficients
+  (equivalently equal long-run coefficients) across the regimes of each
+  decomposed variable, and delta-method differences of the long-run
+  coefficients.
 }
 \keyword{internal}

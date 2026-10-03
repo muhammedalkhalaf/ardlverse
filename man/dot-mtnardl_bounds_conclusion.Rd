@@ -7,6 +7,7 @@
 .mtnardl_bounds_conclusion(F_stat, t_stat, cv, boot = NULL)
 }
 \description{
-MT-NARDL Bounds Test Conclusion
+Bootstrap decision (Fov, t and Find must all reject) or
+  Kripfganz and Schneider (2020) bounds decision on F and t.
 }
 \keyword{internal}

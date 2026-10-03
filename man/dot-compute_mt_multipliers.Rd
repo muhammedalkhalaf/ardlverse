@@ -4,16 +4,10 @@
 \alias{.compute_mt_multipliers}
 \title{Compute Multiple-Threshold Dynamic Multipliers}
 \usage{
-.compute_mt_multipliers(
-  coefs,
-  ec_coef,
-  regime_names,
-  k_total,
-  n_regimes,
-  horizons = 30
-)
+.compute_mt_multipliers(coefs, fit, regime_names, horizons = 30)
 }
 \description{
-Compute Multiple-Threshold Dynamic Multipliers
+Cumulative dynamic multipliers by the full recursion of the
+  estimated ECM (see \code{.ecm_multiplier}).
 }
 \keyword{internal}

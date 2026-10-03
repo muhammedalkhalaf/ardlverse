@@ -79,3 +79,58 @@ test_that("aardl validates inputs correctly", {
   # Invalid fourier_k
   expect_error(aardl(y ~ x1, data = data, type = "fourier", fourier_k = 5))
 })
+
+test_that("aardl statistics equal hand Wald tests and Fourier types give no decision", {
+  set.seed(31)
+  n <- 90
+  d <- data.frame(y = cumsum(rnorm(n)), x = cumsum(rnorm(n)))
+  a <- aardl(y ~ x, d, p = 1, q = 1, case = 3)
+  t <- 3:n
+  dy <- d$y[t] - d$y[t - 1]; ly <- d$y[t - 1]; lx <- d$x[t - 1]
+  dyl <- d$y[t - 1] - d$y[t - 2]; dx0 <- d$x[t] - d$x[t - 1]
+  u <- lm(dy ~ ly + lx + dyl + dx0)
+  expect_equal(a$F_pss, anova(lm(dy ~ dyl + dx0), u)$F[2], tolerance = 1e-10)
+  expect_equal(a$F_ind, anova(lm(dy ~ ly + dyl + dx0), u)$F[2], tolerance = 1e-10)
+  expect_equal(a$t_dep, summary(u)$coefficients["ly", 3], tolerance = 1e-10)
+  for (ty in c("fourier", "fnardl")) {
+    f <- aardl(y ~ x, d, type = ty)
+    expect_equal(f$conclusion$decision, "NOT_AVAILABLE")
+    expect_match(f$conclusion$message, "not valid with Fourier terms")
+  }
+})
+
+test_that("aardl bootstrap types use the recursive engine with the model's design", {
+  set.seed(32)
+  n <- 80
+  d <- data.frame(y = cumsum(rnorm(n)), x = cumsum(rnorm(n)))
+  for (ty in c("bootstrap", "bnardl", "fbootstrap", "fbnardl")) {
+    a <- aardl(y ~ x, d, type = ty, nboot = 9, seed = 1)
+    eng <- a$boot_results$engine
+    expect_lt(eng$design_check, 1e-10)
+    expect_lt(max(eng$dgpcheck), 1e-8)
+    # independent lm()/anova() computation of the three statistics
+    t <- 3:n
+    if (ty %in% c("bnardl", "fbnardl")) {
+      dd <- c(0, diff(d$x))
+      W <- cbind(cumsum(dd * (dd > 0)), cumsum(dd * (dd < 0)))
+    } else {
+      W <- cbind(d$x)
+    }
+    dy <- d$y[t] - d$y[t - 1]; ly <- d$y[t - 1]; lw <- W[t - 1, , drop = FALSE]
+    dyl <- d$y[t - 1] - d$y[t - 2]; dw0 <- W[t, , drop = FALSE] - W[t - 1, , drop = FALSE]
+    if (ty %in% c("fbootstrap", "fbnardl")) {
+      fo <- cbind(sin(2 * pi * t / n), cos(2 * pi * t / n))
+      u <- lm(dy ~ ly + lw + dyl + dw0 + fo)
+      r_ov <- lm(dy ~ dyl + dw0 + fo); r_in <- lm(dy ~ ly + dyl + dw0 + fo)
+    } else {
+      u <- lm(dy ~ ly + lw + dyl + dw0)
+      r_ov <- lm(dy ~ dyl + dw0); r_in <- lm(dy ~ ly + dyl + dw0)
+    }
+    expect_equal(a$F_pss, anova(r_ov, u)$F[2], tolerance = 1e-10)
+    expect_equal(a$F_ind, anova(r_in, u)$F[2], tolerance = 1e-10)
+    expect_equal(a$t_dep, summary(u)$coefficients["ly", 3], tolerance = 1e-10)
+    expect_equal(unname(eng$statistic), c(a$F_pss, a$t_dep, a$F_ind), tolerance = 1e-10)
+    expect_true(all(a$conclusion$p_values >= 0 & a$conclusion$p_values <= 1))
+    expect_equal(a$conclusion$method, "bootstrap")
+  }
+})

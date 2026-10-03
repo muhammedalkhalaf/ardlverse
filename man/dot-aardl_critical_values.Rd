@@ -9,7 +9,7 @@
 \description{
 Bounds for the overall F and the t test from the response
   surfaces of Kripfganz and Schneider (2020). The F test on the lagged
-  regressors has no tabulated bounds; Sam, McNown and Goh (2019) use
-  bootstrap critical values for it.
+  regressors has no tabulated bounds; the bootstrap types give critical
+  values for it.
 }
 \keyword{internal}

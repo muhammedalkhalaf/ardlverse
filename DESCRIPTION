@@ -1,8 +1,8 @@
 Package: ardlverse
 Type: Package
 Title: Comprehensive ARDL: Panel, Bootstrap and Fourier Methods
-Version: 2.1.0
-Date: 2026-10-03
+Version: 2.1.2
+Date: 2026-10-30
 Authors@R: c(
     person("Muhammad Abdullah", "Alkhalaf", 
            email = "muhammedalkhalaf@gmail.com", 

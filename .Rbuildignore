@@ -1,3 +1,4 @@
 ^cran-comments\.md$
-^\.zenodo\.json$
-^MD5$
+^FIX_SUMMARY\.md$
+^\.git$
+^Rplots\.pdf$

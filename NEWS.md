@@ -1,3 +1,21 @@
+# ardlverse 2.1.2
+
+* `hausman_test()`: stops with an error when the two fits differ in dependent variable, regressors, lag orders `p` or `q`, `trend`, `id` or `time` variable, number of observations or number of groups.
+* `hausman_test()`: new argument `quiet` (default `FALSE`); `quiet = TRUE` suppresses all printing.
+* `hausman_test()`: the returned list gains `scale`, the factor applied to the MG covariance matrix (1 when `sigmamore = FALSE`).
+* `hausman_test()`: when the number of groups N satisfies N - 1 < k (k long-run coefficients) the warning and the printed output state that the MG covariance matrix has rank at most N - 1, so the test on all k coefficients cannot be defined. The `strict` warning no longer suggests `sigmamore` or `method = "ginv"` in this case. With `method = "ginv"` the warning and printed output state that the statistic is computed on a subspace of at most N - 1 dimensions.
+* `hausman_test()` documentation: the `sigmamore` factor is stated as (sigma_eff / sigma_MG)^4 on root mean squared residuals. The fourth power is the Stata/xtpmg convention: `xtpmg` stores a variance under e(sigma), so Stata's (e(sigma)_eff / e(sigma)_MG)^2 is this factor. Hausman (1978, eqs. 2.16-2.17, pp. 1258 and 1260) forms V(q) with one common sigma^2, which corresponds to the second power on the RMSE ratio; the fourth power is not in Hausman (1978). For MG versus DFE the factor is a package choice.
+* `hausman_test()` documentation: `method = "ginv"` is described as a package choice (eigenvalues at or below `tol` times the largest absolute eigenvalue are dropped, negative ones included); the attribution to Stata's `hausman` is removed (Stata's `MatGinv` uses an SVD tolerance on singular values and keeps directions with negative eigenvalues).
+* `hausman_test()` documentation: the statistic, degrees of freedom and p-value are written out; a section reports the Monte Carlo share of undefined tests and the rejection rate under the null at N = 5, 10 and 20.
+* README: the `hausman_test()` example passes the MG fit first and the PMG fit second.
+* Tests added: incompatible fits, `quiet`, hand quadratic form on `lm()`-rebuilt MG inputs at 1e-10 (MG versus PMG and MG versus DFE, with and without `sigmamore`), the `sigmamore` factor, NA with the rank message when N - 1 < k.
+* `panel_ardl()` estimation is unchanged.
+
+# ardlverse 2.1.1
+
+* `hausman_test()`: when the difference V(MG) - V(PMG or DFE) had a non-positive eigenvalue the function returned statistic 0 with p-value 1 and printed "Cannot reject H0: efficient model preferred". Nothing had been tested; the quadratic form is not defined in that case (Hausman, 1978, Corollary 2.6 gives non-negative definiteness only asymptotically; footnote 20 warns about near-singular inversion). The default (`method = "strict"`) now returns `NA` for the statistic and p-value with a warning and prints "Test not defined". New `method = "ginv"` computes the statistic with a Moore-Penrose inverse over the eigenvalues larger than `tol` (default 1e-8) times the largest absolute eigenvalue, with degrees of freedom equal to that rank, and warns that discarding small positive eigenvalues can inflate the statistic. The returned list now also holds `eigenvalues`, `n_nonpositive`, `method`, `tol` and `sigmamore`. Results are unchanged when the difference matrix is positive definite. The internal Hausman test of `panel_nardl()` already used the generalised inverse and is unchanged.
+* Tests added for the three cases (not positive definite with `"strict"` and `"ginv"`, positive definite, and MG versus DFE).
+
 # ardlverse 2.1.0
 
 Monte Carlo rates below: y and x independent random walks, n = 100, 200 samples, B = 199, nominal level 5%; Monte Carlo standard errors in parentheses.

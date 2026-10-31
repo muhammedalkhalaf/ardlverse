@@ -153,7 +153,7 @@ panel_ardl <- function(formula, data, id, time, p = 1, q = 1,
   # ECT "y" component: y_{t-1}
   y_lag1 <- y[1:(n - 1)]
 
-  # ECT "X" component: X at CURRENT period t -> rows 2:n
+  # ECT "X" component: X at CURRENT period t, rows 2:n
   X_levels <- as.matrix(data[2:n, x_vars, drop = FALSE])
 
   # Time vector aligned with dy (current period = t_vals[2:n])
@@ -675,72 +675,287 @@ summary.panel_ardl <- function(object, digits = 6, ...) {
 #' consistent and efficient; the MG (inefficient) estimator is consistent but
 #' less efficient. A significant test statistic rejects PMG in favour of MG.
 #'
+#' The statistic is Hausman (1978, eq. 2.7) applied to the long-run
+#' coefficients only (Pesaran, Shin and Smith, 1999):
+#' \deqn{H = (\hat\theta_{MG} - \hat\theta_{eff})'
+#'   [V(\hat\theta_{MG}) - V(\hat\theta_{eff})]^{-1}
+#'   (\hat\theta_{MG} - \hat\theta_{eff}),}
+#' with \eqn{k} degrees of freedom, \eqn{k} being the number of long-run
+#' coefficients; the error-correction and short-run coefficients are not
+#' compared. The p-value is the upper tail of the chi-squared distribution.
+#'
 #' Argument order in v2.0.0 follows Stata's convention: pass the
 #' \strong{inefficient} estimator first (e.g. MG), then the \strong{efficient}
 #' one (e.g. PMG). This is a breaking change from earlier versions.
 #'
-#' @param inefficient A \code{panel_ardl} object - the always-consistent
-#'   estimator (typically MG).
-#' @param efficient A \code{panel_ardl} object - the under-H0 efficient
-#'   estimator (typically PMG).
-#' @param sigmamore Logical. If \code{TRUE} (default, matches Stata's
-#'   \code{sigmamore} option), rescale the inefficient variance matrix to
-#'   address non-positive-definite difference matrices.
+#' The two fits must be comparable: same dependent variable and regressors,
+#' same lag orders \code{p} and \code{q}, same \code{trend}, same \code{id}
+#' and \code{time} variables, same number of observations and same number of
+#' groups. The function stops with an error otherwise.
+#'
+#' @param inefficient A \code{panel_ardl} object, the always-consistent
+#'   estimator (an MG fit).
+#' @param efficient A \code{panel_ardl} object, the under-H0 efficient
+#'   estimator (a PMG or DFE fit).
+#' @param sigmamore Logical. If \code{TRUE} (default), the MG covariance
+#'   matrix is multiplied, before the difference is taken, by the factor
+#'   \deqn{(\hat\sigma_{eff} / \hat\sigma_{MG})^4,}
+#'   where \eqn{\hat\sigma = \sqrt{\mathrm{mean}(\hat\varepsilon^2)}} is the
+#'   root mean squared residual of each fit (component \code{sigma}); the
+#'   efficient covariance matrix is not changed. The fourth power reproduces
+#'   Stata's \code{hausman, sigmamore} after \code{xtpmg}: \code{hausman}
+#'   multiplies the consistent covariance by \code{(e(sigma)_eff/e(sigma)_MG)^2}
+#'   and \code{xtpmg} stores the mean squared residual (a variance) under
+#'   \code{e(sigma)}, so the realised scale is the fourth power of the RMSE
+#'   ratio. The fourth power is the Stata/\code{xtpmg} convention. Hausman
+#'   (1978, eqs. 2.16-2.17, p. 1258; p. 1260) forms \eqn{V(q)} with a single
+#'   \eqn{\sigma^2} estimated from either estimator, which is what the Stata
+#'   manual describes for \code{sigmamore} (a common disturbance variance from
+#'   the efficient estimator) and corresponds to the second power on the RMSE
+#'   ratio; the fourth power is not in Hausman (1978). For MG versus DFE the
+#'   same fourth power with the within-regression RMSE is a package choice
+#'   (Stata's \code{xtpmg} DFE branch stores a standard deviation that
+#'   includes the fixed-effect variance, so no exact Stata analogue exists).
+#'   The scale actually applied is returned as \code{scale} (1 when
+#'   \code{sigmamore = FALSE}).
+#' @param method Character. How to treat a difference matrix
+#'   \eqn{V_{MG} - V_{eff}} that is not positive definite. \code{"strict"}
+#'   (default) returns \code{NA} for the statistic and p-value with a warning:
+#'   the test is not defined. \code{"ginv"} uses the spectral pseudo-inverse
+#'   over the eigenvalues larger than \code{tol} times the largest absolute
+#'   eigenvalue, with degrees of freedom equal to that rank. Eigenvalues at or
+#'   below the threshold, negative ones included, are dropped. This rule is a
+#'   package choice. It differs from Stata's \code{hausman}, whose
+#'   generalised inverse (\code{MatGinv}) uses a singular value decomposition
+#'   with tolerance \code{max(sv) * k * 1e-9} on the singular values: Stata
+#'   drops only near-zero directions, keeps directions with negative
+#'   eigenvalues and can then report a negative chi-squared with a warning.
+#' @param tol Numeric. Relative tolerance for an eigenvalue to count as
+#'   positive. Default \code{1e-8}.
+#' @param quiet Logical. If \code{TRUE}, nothing is printed; warnings are
+#'   still issued and the result is returned invisibly as usual. Default
+#'   \code{FALSE}.
 #'
 #' @return An (invisible) list with \code{statistic}, \code{df},
-#'   \code{p.value}, and \code{theta_diff}.
+#'   \code{p.value}, \code{theta_diff}, \code{eigenvalues} (of the
+#'   symmetrised difference matrix), \code{n_nonpositive} (number of
+#'   eigenvalues at or below the tolerance), \code{method}, \code{tol},
+#'   \code{sigmamore} and \code{scale} (the factor applied to the MG
+#'   covariance matrix).
+#'
+#' @section Non-positive-definite difference matrix:
+#' Hausman (1978, Corollary 2.6) shows that \eqn{V(\hat\beta_1) - V(\hat\beta_0)}
+#' is non-negative definite asymptotically when \eqn{\hat\beta_0} is
+#' efficient under the null, and warns (footnote 20) about inverting a nearly
+#' singular matrix. In finite samples the estimated difference can have
+#' negative eigenvalues; the quadratic form is then not a valid chi-squared
+#' statistic. Versions up to 2.1.0 returned a statistic of 0 with p-value 1 in
+#' that case, which reads as acceptance of homogeneity although nothing was
+#' tested. The default now returns \code{NA} with a warning. With
+#' \code{method = "ginv"} the statistic is computed on the positive
+#' eigen-subspace; discarding eigenvalues that are small but positive can
+#' inflate the statistic considerably, so the tolerance should be reported
+#' with the result.
+#'
+#' The MG covariance matrix is the cross-section variance of the \eqn{N}
+#' group estimates divided by \eqn{N} (Pesaran, Shin and Smith, 1999), so it
+#' has rank at most \eqn{N - 1}. When \eqn{N - 1 < k} the difference matrix
+#' can never be positive definite and the test on all \eqn{k} long-run
+#' coefficients is not defined for any sample; neither \code{sigmamore} nor
+#' a different tolerance can change this, and the warning says so. With
+#' \code{method = "ginv"} a statistic is still reported, on a subspace of at
+#' most \eqn{N - 1} dimensions (df at most \eqn{N - 1}), not on all
+#' \eqn{k} coefficients.
+#'
+#' @section Small number of groups:
+#' In a Monte Carlo under the null (homogeneous long-run slopes, ARDL(1,1)
+#' with group-specific adjustment, I(1) regressors, 200 replications per
+#' cell, default settings) the test was undefined (returned \code{NA}) in 1
+#' to 21 percent of samples at \eqn{N = 10} and in 11.5 to 53 percent at
+#' \eqn{N = 5}, growing with \eqn{T} and \eqn{k}, and among the defined cases
+#' it rejected a true null at the nominal 5 percent level in 8.9 to 17.7
+#' percent of samples at \eqn{N = 10} and 7.9 to 25.5 percent at
+#' \eqn{N = 5} (at \eqn{N = 20}: 0 to 2.5 percent undefined, 5.5 to 12.3
+#' percent rejections). With \eqn{N \le 10}{N <= 10} the p-value should be read with
+#' this in mind.
 #'
 #' @references
 #' Hausman, J. A. (1978). Specification tests in econometrics.
 #' \emph{Econometrica}, 46(6), 1251-1271.
+#'
+#' Pesaran, M. H., Shin, Y. and Smith, R. P. (1999). Pooled mean group
+#' estimation of dynamic heterogeneous panels. \emph{Journal of the American
+#' Statistical Association}, 94(446), 621-634.
 #'
 #' @examples
 #' \dontrun{
 #' fit_mg  <- panel_ardl(y ~ x, data = d, id = "i", time = "t", estimator = "mg")
 #' fit_pmg <- panel_ardl(y ~ x, data = d, id = "i", time = "t", estimator = "pmg")
 #' hausman_test(fit_mg, fit_pmg)
+#' hausman_test(fit_mg, fit_pmg, method = "ginv")
+#' h <- hausman_test(fit_mg, fit_pmg, quiet = TRUE)
+#' h$statistic
 #' }
 #'
 #' @export
-hausman_test <- function(inefficient, efficient, sigmamore = TRUE) {
+hausman_test <- function(inefficient, efficient, sigmamore = TRUE,
+                         method = c("strict", "ginv"), tol = 1e-8,
+                         quiet = FALSE) {
 
+  method <- match.arg(method)
+  if (!is.numeric(tol) || length(tol) != 1L || !is.finite(tol) || tol < 0)
+    stop("'tol' must be a single non-negative number")
+  if (!is.logical(quiet) || length(quiet) != 1L || is.na(quiet))
+    stop("'quiet' must be TRUE or FALSE")
   if (inefficient$estimator != "mg")
     stop("'inefficient' must be a MG model")
   if (!efficient$estimator %in% c("pmg", "dfe"))
     stop("'efficient' must be a PMG or DFE model")
 
+  .check_hausman_compatible(inefficient, efficient)
+
   theta_diff <- inefficient$long_run - efficient$long_run
-  df <- length(theta_diff)
+  k <- length(theta_diff)
 
   V_ineff <- inefficient$long_run_vcov
   V_eff   <- efficient$long_run_vcov
 
+  # Number of groups that entered the MG average: V(MG) has rank <= N - 1
+  N_mg <- if (!is.null(inefficient$ec_group)) length(inefficient$ec_group)
+          else inefficient$ngroups
+
+  scale <- 1
   if (sigmamore) {
-    # xtpmg stores e(sigma) = mean(resid^2) = sigma2, while Stata's hausman
-    # assumes e(sigma) = sigma (RMSE) and does scale = (e(sigma)_E/e(sigma)_b)^2.
-    # Net effect: scale = (sigma2_eff / sigma2_ineff)^2 = (sigma_eff/sigma_ineff)^4.
+    # Stata/xtpmg convention (see the Rd): xtpmg stores e(sigma) = mean(resid^2),
+    # hausman applies (e(sigma)_eff / e(sigma)_MG)^2, so the realised factor on
+    # the RMSE ratio is the fourth power. Only V(MG) is rescaled.
     scale   <- (efficient$sigma / inefficient$sigma)^4
     V_ineff <- scale * V_ineff
   }
 
   W   <- V_ineff - V_eff
   W   <- (W + t(W)) / 2          # symmetrise numerically
-  eig <- eigen(W, symmetric = TRUE, only.values = TRUE)$values
+  e   <- eigen(W, symmetric = TRUE)
+  eig <- e$values
+  thr <- tol * max(abs(eig))
+  pos <- eig > thr
+  n_nonpos <- sum(!pos)
 
-  if (any(eig <= 0)) {
-    H  <- 0
-    pv <- 1
-  } else {
-    H  <- as.numeric(t(theta_diff) %*% solve(W) %*% theta_diff)
-    pv <- 1 - pchisq(H, df)
-  }
+  rank_deficient <- !is.null(N_mg) && N_mg - 1L < k
+  rank_note <- if (rank_deficient)
+    sprintf(paste(" The MG covariance matrix has rank at most N - 1 = %d < k = %d",
+                  "(cross-section variance of %d group estimates), so the",
+                  "difference cannot be positive definite and the test on all",
+                  "k long-run coefficients cannot be defined for this number of",
+                  "groups; neither sigmamore nor tol can change this."),
+            N_mg - 1L, k, N_mg) else ""
 
   eff_label <- toupper(efficient$estimator)
-  cat(sprintf("\n--- Hausman Test (sigmamore=%s): MG vs %s ---\n",
-              sigmamore, eff_label))
-  cat("H0: long-run homogeneity (efficient estimator preferred)\n")
-  cat(sprintf("Chi2(%d) = %.4f   p-value = %.4f\n", df, H, pv))
-  cat(if (pv < 0.05) "Reject H0: use MG\n" else "Cannot reject H0: efficient model preferred\n")
+  if (!quiet) {
+    cat(sprintf("\n--- Hausman Test (sigmamore=%s, method=%s): MG vs %s ---\n",
+                sigmamore, method, eff_label))
+    cat("H0: long-run homogeneity (efficient estimator preferred)\n")
+  }
 
-  invisible(list(statistic = H, df = df, p.value = pv, theta_diff = theta_diff))
+  if (n_nonpos == 0L) {
+    H  <- as.numeric(t(theta_diff) %*% solve(W) %*% theta_diff)
+    df <- k
+    pv <- stats::pchisq(H, df, lower.tail = FALSE)
+  } else if (method == "strict") {
+    H <- NA_real_; df <- NA_integer_; pv <- NA_real_
+    options_note <- if (rank_deficient) "" else sprintf(paste0(
+      " Options: sigmamore = TRUE (already used: %s) or method = \"ginv\" ",
+      "(generalised inverse on the positive eigen-subspace)."), sigmamore)
+    warning(sprintf(paste0(
+      "The difference V(MG) - V(%s) is not positive definite (%d of %d ",
+      "eigenvalues <= %.1e); the Hausman statistic is not defined.%s ",
+      "Returning NA.%s"),
+      eff_label, n_nonpos, k, thr, rank_note, options_note), call. = FALSE)
+  } else {
+    if (!any(pos)) {
+      H <- NA_real_; df <- NA_integer_; pv <- NA_real_
+      warning(paste0("No positive eigenvalue in the difference matrix; statistic not defined.",
+                     rank_note), call. = FALSE)
+    } else {
+      Vinv <- e$vectors[, pos, drop = FALSE] %*%
+        diag(1 / eig[pos], sum(pos)) %*% t(e$vectors[, pos, drop = FALSE])
+      H  <- as.numeric(t(theta_diff) %*% Vinv %*% theta_diff)
+      df <- sum(pos)
+      pv <- stats::pchisq(H, df, lower.tail = FALSE)
+      ginv_rank_note <- if (rank_deficient) sprintf(paste(
+        " The MG covariance matrix has rank at most N - 1 = %d < k = %d",
+        "(cross-section variance of %d group estimates): the statistic below",
+        "tests only a subspace of at most N - 1 = %d dimensions, not all k",
+        "long-run coefficients."), N_mg - 1L, k, N_mg, N_mg - 1L) else ""
+      warning(sprintf(paste0(
+        "The difference matrix is not positive definite (%d of %d eigenvalues ",
+        "<= %.1e).%s The statistic uses a generalised inverse with df = %d. ",
+        "Small positive eigenvalues can inflate the statistic; report tol."),
+        n_nonpos, k, thr, ginv_rank_note, df), call. = FALSE)
+    }
+  }
+
+  if (!quiet) {
+    if (is.na(H)) {
+      cat(sprintf("Difference matrix not positive definite (%d of %d eigenvalues <= %.1e).\n",
+                  n_nonpos, k, thr))
+      if (nzchar(rank_note))
+        cat(sprintf("MG covariance matrix has rank at most N - 1 = %d < k = %d: test cannot be defined.\n",
+                    N_mg - 1L, k))
+      cat("Test not defined: statistic and p-value are NA.\n")
+    } else {
+      cat(sprintf("Chi2(%d) = %.4f   p-value = %.4f\n", df, H, pv))
+      if (n_nonpos > 0L)
+        cat(sprintf("(generalised inverse: %d non-positive eigenvalue(s) dropped, tol = %.1e)\n",
+                    n_nonpos, tol))
+      if (rank_deficient)
+        cat(sprintf("(MG covariance rank at most N - 1 = %d < k = %d: reduced-rank statistic on %d of %d dimensions)\n",
+                    N_mg - 1L, k, df, k))
+      cat(if (pv < 0.05) "Reject H0: use MG\n" else "Cannot reject H0: efficient model preferred\n")
+    }
+  }
+
+  invisible(list(statistic = H, df = df, p.value = pv, theta_diff = theta_diff,
+                 eigenvalues = eig, n_nonpositive = n_nonpos,
+                 method = method, tol = tol, sigmamore = sigmamore,
+                 scale = scale))
+}
+
+# Check that two panel_ardl fits can be compared by hausman_test():
+# same variables, lag orders, trend, panel identifiers, sample size and
+# number of groups. Components that are missing from both objects are not
+# compared (allows constructed objects in tests).
+.check_hausman_compatible <- function(inefficient, efficient) {
+  mismatch <- character(0)
+  cmp <- function(field, label = field) {
+    a <- inefficient[[field]]; b <- efficient[[field]]
+    if (is.null(a) && is.null(b)) return(invisible(NULL))
+    if (is.null(a) || is.null(b) || length(a) != length(b) ||
+        !isTRUE(all(as.character(a) == as.character(b))))
+      mismatch <<- c(mismatch, sprintf("%s (%s vs %s)", label,
+                                      paste(format(a), collapse = ","),
+                                      paste(format(b), collapse = ",")))
+    invisible(NULL)
+  }
+  cmp("y_var",  "dependent variable")
+  cmp("x_vars", "regressors")
+  cmp("p",      "lag order p")
+  cmp("q",      "lag orders q")
+  cmp("trend",  "trend")
+  cmp("id",     "id variable")
+  cmp("time",   "time variable")
+  cmp("nobs",   "number of observations")
+  cmp("ngroups", "number of groups")
+  n_a <- length(inefficient$ec_group); n_b <- length(efficient$ec_group)
+  if (n_a > 0L && n_b > 0L && n_a != n_b)
+    mismatch <- c(mismatch, sprintf("number of groups used (%d vs %d)", n_a, n_b))
+  if (length(inefficient$long_run) != length(efficient$long_run))
+    mismatch <- c(mismatch, sprintf("number of long-run coefficients (%d vs %d)",
+                                    length(inefficient$long_run), length(efficient$long_run)))
+  if (length(mismatch))
+    stop("The two fits are not comparable; they differ in: ",
+         paste(mismatch, collapse = "; "),
+         ". Both fits must use the same formula, lags, trend, data and groups.",
+         call. = FALSE)
+  invisible(NULL)
 }

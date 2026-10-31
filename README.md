@@ -49,8 +49,16 @@ pmg_model <- panel_ardl(
 
 summary(pmg_model)
 
-# Hausman test: PMG vs MG
-hausman_test(pmg_model)
+# Hausman test: MG (inefficient, first) vs PMG (efficient, second)
+mg_model <- panel_ardl(
+  gdp ~ inflation + investment,
+  data = data,
+  id = "country",
+  time = "year",
+  p = 1, q = 1,
+  estimator = "mg"
+)
+hausman_test(mg_model, pmg_model)
 ```
 
 ### Bootstrap Bounds Test

@@ -4,22 +4,71 @@
 \alias{hausman_test}
 \title{Hausman Test for Panel ARDL Estimators}
 \usage{
-hausman_test(inefficient, efficient, sigmamore = TRUE)
+hausman_test(
+  inefficient,
+  efficient,
+  sigmamore = TRUE,
+  method = c("strict", "ginv"),
+  tol = 1e-08,
+  quiet = FALSE
+)
 }
 \arguments{
-\item{inefficient}{A \code{panel_ardl} object - the always-consistent
-estimator (typically MG).}
+\item{inefficient}{A \code{panel_ardl} object, the always-consistent
+estimator (an MG fit).}
 
-\item{efficient}{A \code{panel_ardl} object - the under-H0 efficient
-estimator (typically PMG).}
+\item{efficient}{A \code{panel_ardl} object, the under-H0 efficient
+estimator (a PMG or DFE fit).}
 
-\item{sigmamore}{Logical. If \code{TRUE} (default, matches Stata's
-\code{sigmamore} option), rescale the inefficient variance matrix to
-address non-positive-definite difference matrices.}
+\item{sigmamore}{Logical. If \code{TRUE} (default), the MG covariance
+matrix is multiplied, before the difference is taken, by the factor
+\deqn{(\hat\sigma_{eff} / \hat\sigma_{MG})^4,}
+where \eqn{\hat\sigma = \sqrt{\mathrm{mean}(\hat\varepsilon^2)}} is the
+root mean squared residual of each fit (component \code{sigma}); the
+efficient covariance matrix is not changed. The fourth power reproduces
+Stata's \code{hausman, sigmamore} after \code{xtpmg}: \code{hausman}
+multiplies the consistent covariance by \code{(e(sigma)_eff/e(sigma)_MG)^2}
+and \code{xtpmg} stores the mean squared residual (a variance) under
+\code{e(sigma)}, so the realised scale is the fourth power of the RMSE
+ratio. The fourth power is the Stata/\code{xtpmg} convention. Hausman
+(1978, eqs. 2.16-2.17, p. 1258; p. 1260) forms \eqn{V(q)} with a single
+\eqn{\sigma^2} estimated from either estimator, which is what the Stata
+manual describes for \code{sigmamore} (a common disturbance variance from
+the efficient estimator) and corresponds to the second power on the RMSE
+ratio; the fourth power is not in Hausman (1978). For MG versus DFE the
+same fourth power with the within-regression RMSE is a package choice
+(Stata's \code{xtpmg} DFE branch stores a standard deviation that
+includes the fixed-effect variance, so no exact Stata analogue exists).
+The scale actually applied is returned as \code{scale} (1 when
+\code{sigmamore = FALSE}).}
+
+\item{method}{Character. How to treat a difference matrix
+\eqn{V_{MG} - V_{eff}} that is not positive definite. \code{"strict"}
+(default) returns \code{NA} for the statistic and p-value with a warning:
+the test is not defined. \code{"ginv"} uses the spectral pseudo-inverse
+over the eigenvalues larger than \code{tol} times the largest absolute
+eigenvalue, with degrees of freedom equal to that rank. Eigenvalues at or
+below the threshold, negative ones included, are dropped. This rule is a
+package choice. It differs from Stata's \code{hausman}, whose
+generalised inverse (\code{MatGinv}) uses a singular value decomposition
+with tolerance \code{max(sv) * k * 1e-9} on the singular values: Stata
+drops only near-zero directions, keeps directions with negative
+eigenvalues and can then report a negative chi-squared with a warning.}
+
+\item{tol}{Numeric. Relative tolerance for an eigenvalue to count as
+positive. Default \code{1e-8}.}
+
+\item{quiet}{Logical. If \code{TRUE}, nothing is printed; warnings are
+still issued and the result is returned invisibly as usual. Default
+\code{FALSE}.}
 }
 \value{
 An (invisible) list with \code{statistic}, \code{df},
-  \code{p.value}, and \code{theta_diff}.
+  \code{p.value}, \code{theta_diff}, \code{eigenvalues} (of the
+  symmetrised difference matrix), \code{n_nonpositive} (number of
+  eigenvalues at or below the tolerance), \code{method}, \code{tol},
+  \code{sigmamore} and \code{scale} (the factor applied to the MG
+  covariance matrix).
 }
 \description{
 Compare two \code{panel_ardl} estimators (typically MG vs PMG)
@@ -30,19 +79,80 @@ Under the null of long-run homogeneity, the PMG (efficient) estimator is
 consistent and efficient; the MG (inefficient) estimator is consistent but
 less efficient. A significant test statistic rejects PMG in favour of MG.
 
+The statistic is Hausman (1978, eq. 2.7) applied to the long-run
+coefficients only (Pesaran, Shin and Smith, 1999):
+\deqn{H = (\hat\theta_{MG} - \hat\theta_{eff})'
+  [V(\hat\theta_{MG}) - V(\hat\theta_{eff})]^{-1}
+  (\hat\theta_{MG} - \hat\theta_{eff}),}
+with \eqn{k} degrees of freedom, \eqn{k} being the number of long-run
+coefficients; the error-correction and short-run coefficients are not
+compared. The p-value is the upper tail of the chi-squared distribution.
+
 Argument order in v2.0.0 follows Stata's convention: pass the
 \strong{inefficient} estimator first (e.g. MG), then the \strong{efficient}
 one (e.g. PMG). This is a breaking change from earlier versions.
+
+The two fits must be comparable: same dependent variable and regressors,
+same lag orders \code{p} and \code{q}, same \code{trend}, same \code{id}
+and \code{time} variables, same number of observations and same number of
+groups. The function stops with an error otherwise.
 }
+\section{Non-positive-definite difference matrix}{
+
+Hausman (1978, Corollary 2.6) shows that \eqn{V(\hat\beta_1) - V(\hat\beta_0)}
+is non-negative definite asymptotically when \eqn{\hat\beta_0} is
+efficient under the null, and warns (footnote 20) about inverting a nearly
+singular matrix. In finite samples the estimated difference can have
+negative eigenvalues; the quadratic form is then not a valid chi-squared
+statistic. Versions up to 2.1.0 returned a statistic of 0 with p-value 1 in
+that case, which reads as acceptance of homogeneity although nothing was
+tested. The default now returns \code{NA} with a warning. With
+\code{method = "ginv"} the statistic is computed on the positive
+eigen-subspace; discarding eigenvalues that are small but positive can
+inflate the statistic considerably, so the tolerance should be reported
+with the result.
+
+The MG covariance matrix is the cross-section variance of the \eqn{N}
+group estimates divided by \eqn{N} (Pesaran, Shin and Smith, 1999), so it
+has rank at most \eqn{N - 1}. When \eqn{N - 1 < k} the difference matrix
+can never be positive definite and the test on all \eqn{k} long-run
+coefficients is not defined for any sample; neither \code{sigmamore} nor
+a different tolerance can change this, and the warning says so. With
+\code{method = "ginv"} a statistic is still reported, on a subspace of at
+most \eqn{N - 1} dimensions (df at most \eqn{N - 1}), not on all
+\eqn{k} coefficients.
+}
+
+\section{Small number of groups}{
+
+In a Monte Carlo under the null (homogeneous long-run slopes, ARDL(1,1)
+with group-specific adjustment, I(1) regressors, 200 replications per
+cell, default settings) the test was undefined (returned \code{NA}) in 1
+to 21 percent of samples at \eqn{N = 10} and in 11.5 to 53 percent at
+\eqn{N = 5}, growing with \eqn{T} and \eqn{k}, and among the defined cases
+it rejected a true null at the nominal 5 percent level in 8.9 to 17.7
+percent of samples at \eqn{N = 10} and 7.9 to 25.5 percent at
+\eqn{N = 5} (at \eqn{N = 20}: 0 to 2.5 percent undefined, 5.5 to 12.3
+percent rejections). With \eqn{N \le 10}{N <= 10} the p-value should be read with
+this in mind.
+}
+
 \examples{
 \dontrun{
 fit_mg  <- panel_ardl(y ~ x, data = d, id = "i", time = "t", estimator = "mg")
 fit_pmg <- panel_ardl(y ~ x, data = d, id = "i", time = "t", estimator = "pmg")
 hausman_test(fit_mg, fit_pmg)
+hausman_test(fit_mg, fit_pmg, method = "ginv")
+h <- hausman_test(fit_mg, fit_pmg, quiet = TRUE)
+h$statistic
 }
 
 }
 \references{
 Hausman, J. A. (1978). Specification tests in econometrics.
 \emph{Econometrica}, 46(6), 1251-1271.
+
+Pesaran, M. H., Shin, Y. and Smith, R. P. (1999). Pooled mean group
+estimation of dynamic heterogeneous panels. \emph{Journal of the American
+Statistical Association}, 94(446), 621-634.
 }
